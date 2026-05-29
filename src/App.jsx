@@ -553,14 +553,14 @@ function ObraView({ obra, onBack, setError }) {
     return arr.filter(e => {
       const s = filters.search.toLowerCase();
       const ms = e.pos.toLowerCase().includes(s) || e.torre.toLowerCase().includes(s) || e.piso.toLowerCase().includes(s);
-      const mt  = filterTipo   === "TODOS" || e.tipo  === filterTipo;
-      const mtr = filterTorre  === "TODAS" || e.torre === filterTorre;
-      const mp  = filterPiso   === "TODOS" || e.piso  === filterPiso;
-      const ml  = filterLote   === "TODOS" || e.lote  === filterLote;
+      const mt  = filters.tipo   === "TODOS" || e.tipo  === filters.tipo;
+      const mtr = filters.torre  === "TODAS" || e.torre === filters.torre;
+      const mp  = filters.piso   === "TODOS" || e.piso  === filters.piso;
+      const ml  = filters.lote   === "TODOS" || e.lote  === filters.lote;
       const est = getEstado(e.pos);
-      const me  = filterEstado === "TODOS" || est === filterEstado.toLowerCase();
+      const me  = filters.estado === "TODOS" || est === filters.estado.toLowerCase();
       return ms && mt && mtr && mp && ml && me;
-    }).sort((a,b) => {
+    }.sort((a,b) => {
       let av = a[sortCol], bv = b[sortCol];
       if (typeof av === "string") av = av.toLowerCase();
       if (typeof bv === "string") bv = bv.toLowerCase();
