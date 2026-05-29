@@ -734,12 +734,12 @@ function ObraView({ obra, onBack, setError }) {
                 <select value={filters.piso} onChange={e=>setF("piso", e.target.value)} style={{ ...inp,margin:0,width:"auto" }}>
                   {pisos.map(t=><option key={t} value={t}>{t==="TODOS"?"Piso: Todos":t}</option>)}
                 </select>
-                {["TODOS","MD","MDT","P"].map(t=>(
-                  <button key={t} onClick={()=>setF("tipo", t)} style={{ padding:"5px 10px",borderRadius:5,border:"1px solid",borderColor:filters.tipo===t?"#d97706":"#cbd5e1",background:filters.tipo===t?"#fef3c7":"#f8fafc",color:filters.tipo===t?"#d97706":"#64748b",fontFamily:"'DM Mono',monospace",fontSize:10,cursor:"pointer" }}>{t}</button>
-                ))}
-                {["TODOS","pendiente","recibido","montado"].map(t=>(
-                  <button key={t} onClick={()=>setF("estado", t)} style={{ padding:"5px 10px",borderRadius:5,border:"1px solid",borderColor:filters.estado===t?"#475569":"#cbd5e1",background:filters.estado===t?"#f1f5f9":"#f8fafc",color:filters.estado===t?"#1e293b":"#94a3b8",fontFamily:"'DM Mono',monospace",fontSize:9,cursor:"pointer",textTransform:"uppercase" }}>{t==="TODOS"?"Estado":t}</button>
-                ))}
+                <select value={filters.tipo} onChange={e=>setF("tipo", e.target.value)} style={{ ...inp,margin:0,width:"auto" }}>
+                  {["TODOS","MD","MDT","P"].map(t=><option key={t} value={t}>{t==="TODOS"?"Tipo: Todos":t}</option>)}
+                </select>
+                <select value={filters.estado} onChange={e=>setF("estado", e.target.value)} style={{ ...inp,margin:0,width:"auto" }}>
+                  {["TODOS","pendiente","recibido","montado"].map(t=><option key={t} value={t}>{t==="TODOS"?"Estado: Todos":t.charAt(0).toUpperCase()+t.slice(1)}</option>)}
+                </select>
               </div>
 
               <div style={{ maxHeight:520,overflowY:"auto" }}>
@@ -823,8 +823,12 @@ function ObraView({ obra, onBack, setError }) {
               <select value={filters.lote} onChange={e=>setF("lote", e.target.value)} style={{ ...inp,margin:0,width:"auto" }}>{lotes.map(t=><option key={t} value={t}>{t==="TODOS"?"Lote: Todos":t}</option>)}</select>
               <select value={filters.torre} onChange={e=>setF("torre", e.target.value)} style={{ ...inp,margin:0,width:"auto" }}>{torres.map(t=><option key={t} value={t}>{t==="TODAS"?"Torre: Todas":t}</option>)}</select>
               <select value={filters.piso} onChange={e=>setF("piso", e.target.value)} style={{ ...inp,margin:0,width:"auto" }}>{pisos.map(t=><option key={t} value={t}>{t==="TODOS"?"Piso: Todos":t}</option>)}</select>
-              {["TODOS","MD","MDT","P"].map(t=><button key={t} onClick={()=>setF("tipo", t)} style={{ padding:"5px 10px",borderRadius:5,border:"1px solid",borderColor:filters.tipo===t?"#d97706":"#cbd5e1",background:filters.tipo===t?"#fef3c7":"#f8fafc",color:filters.tipo===t?"#d97706":"#64748b",fontFamily:"'DM Mono',monospace",fontSize:10,cursor:"pointer" }}>{t}</button>)}
-              {["TODOS","pendiente","recibido","montado"].map(t=><button key={t} onClick={()=>setF("estado", t)} style={{ padding:"5px 10px",borderRadius:5,border:"1px solid",borderColor:filters.estado===t?"#475569":"#cbd5e1",background:filters.estado===t?"#f1f5f9":"#f8fafc",color:filters.estado===t?"#1e293b":"#94a3b8",fontFamily:"'DM Mono',monospace",fontSize:9,cursor:"pointer",textTransform:"uppercase" }}>{t==="TODOS"?"Estado":t}</button>)}
+              <select value={filters.tipo} onChange={e=>setF("tipo", e.target.value)} style={{ ...inp,margin:0,width:"auto" }}>
+                {["TODOS","MD","MDT","P"].map(t=><option key={t} value={t}>{t==="TODOS"?"Tipo: Todos":t}</option>)}
+              </select>
+              <select value={filters.estado} onChange={e=>setF("estado", e.target.value)} style={{ ...inp,margin:0,width:"auto" }}>
+                {["TODOS","pendiente","recibido","montado"].map(t=><option key={t} value={t}>{t==="TODOS"?"Estado: Todos":t.charAt(0).toUpperCase()+t.slice(1)}</option>)}
+              </select>
             </div>
             <div style={{ overflowX:"auto" }}>
               <table style={{ width:"100%",borderCollapse:"collapse",fontSize:11 }}>
