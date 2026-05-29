@@ -560,7 +560,7 @@ function ObraView({ obra, onBack, setError }) {
       const est = getEstado(e.pos);
       const me  = filters.estado === "TODOS" || est === filters.estado.toLowerCase();
       return ms && mt && mtr && mp && ml && me;
-    }.sort((a,b) => {
+    }).sort((a,b) => {
       let av = a[sortCol], bv = b[sortCol];
       if (typeof av === "string") av = av.toLowerCase();
       if (typeof bv === "string") bv = bv.toLowerCase();
