@@ -403,14 +403,10 @@ function ObraView({ obra, onBack, setError }) {
   const [registroMode, setRegistroMode] = useState("montar"); // montar | recibir
   const [note, setNote] = useState("");
   const [activeTab, setActiveTab] = useState("registro");
-  const [search, setSearch] = useState("");
-  const [filterTipo, setFilterTipo] = useState("TODOS");
-  const [filterTorre, setFilterTorre] = useState("TODAS");
-  const [filterPiso, setFilterPiso] = useState("TODOS");
-  const [filterLote, setFilterLote] = useState("TODOS");
-  const [filterEstado, setFilterEstado] = useState("TODOS");
+  const [filters, setFilters] = useState({ search:"", tipo:"TODOS", torre:"TODAS", piso:"TODOS", lote:"TODOS", estado:"TODOS" });
   const [sortCol, setSortCol] = useState("pos");
   const [sortDir, setSortDir] = useState("asc");
+  const setF = (key, val) => setFilters(prev => ({...prev, [key]: val}));
   const [selectedWeek, setSelectedWeek] = useState(getWeekNumber(TODAY));
 
   useEffect(() => { loadData(); }, [obra.id]);
@@ -555,7 +551,7 @@ function ObraView({ obra, onBack, setError }) {
   // Direct filter computation — no useMemo to avoid stale closure issues
   function applyFilters(arr) {
     return arr.filter(e => {
-      const s = search.toLowerCase();
+      const s = filters.search.toLowerCase();
       const ms = e.pos.toLowerCase().includes(s) || e.torre.toLowerCase().includes(s) || e.piso.toLowerCase().includes(s);
       const mt  = filterTipo   === "TODOS" || e.tipo  === filterTipo;
       const mtr = filterTorre  === "TODAS" || e.torre === filterTorre;
@@ -728,21 +724,21 @@ function ObraView({ obra, onBack, setError }) {
 
               {/* Filtros */}
               <div style={{ display:"flex",gap:6,marginBottom:10,flexWrap:"wrap" }}>
-                <input placeholder="Buscar posición…" value={search} onChange={e=>setSearch(e.target.value)} style={{ ...inp,flex:1,margin:0,minWidth:120 }}/>
-                <select value={filterLote} onChange={e=>setFilterLote(e.target.value)} style={{ ...inp,margin:0,width:"auto" }}>
+                <input placeholder="Buscar posición…" value={filters.search} onChange={e=>setF("search", e.target.value)} style={{ ...inp,flex:1,margin:0,minWidth:120 }}/>
+                <select value={filters.lote} onChange={e=>setF("lote", e.target.value)} style={{ ...inp,margin:0,width:"auto" }}>
                   {lotes.map(t=><option key={t} value={t}>{t==="TODOS"?"Lote: Todos":t}</option>)}
                 </select>
-                <select value={filterTorre} onChange={e=>setFilterTorre(e.target.value)} style={{ ...inp,margin:0,width:"auto" }}>
+                <select value={filters.torre} onChange={e=>setF("torre", e.target.value)} style={{ ...inp,margin:0,width:"auto" }}>
                   {torres.map(t=><option key={t} value={t}>{t==="TODAS"?"Torre: Todas":t}</option>)}
                 </select>
-                <select value={filterPiso} onChange={e=>setFilterPiso(e.target.value)} style={{ ...inp,margin:0,width:"auto" }}>
+                <select value={filters.piso} onChange={e=>setF("piso", e.target.value)} style={{ ...inp,margin:0,width:"auto" }}>
                   {pisos.map(t=><option key={t} value={t}>{t==="TODOS"?"Piso: Todos":t}</option>)}
                 </select>
                 {["TODOS","MD","MDT","P"].map(t=>(
-                  <button key={t} onClick={()=>setFilterTipo(t)} style={{ padding:"5px 10px",borderRadius:5,border:"1px solid",borderColor:filterTipo===t?"#d97706":"#cbd5e1",background:filterTipo===t?"#fef3c7":"#f8fafc",color:filterTipo===t?"#d97706":"#64748b",fontFamily:"'DM Mono',monospace",fontSize:10,cursor:"pointer" }}>{t}</button>
+                  <button key={t} onClick={()=>setF("tipo", t)} style={{ padding:"5px 10px",borderRadius:5,border:"1px solid",borderColor:filters.tipo===t?"#d97706":"#cbd5e1",background:filters.tipo===t?"#fef3c7":"#f8fafc",color:filters.tipo===t?"#d97706":"#64748b",fontFamily:"'DM Mono',monospace",fontSize:10,cursor:"pointer" }}>{t}</button>
                 ))}
                 {["TODOS","pendiente","recibido","montado"].map(t=>(
-                  <button key={t} onClick={()=>setFilterEstado(t)} style={{ padding:"5px 10px",borderRadius:5,border:"1px solid",borderColor:filterEstado===t?"#475569":"#cbd5e1",background:filterEstado===t?"#f1f5f9":"#f8fafc",color:filterEstado===t?"#1e293b":"#94a3b8",fontFamily:"'DM Mono',monospace",fontSize:9,cursor:"pointer",textTransform:"uppercase" }}>{t==="TODOS"?"Estado":t}</button>
+                  <button key={t} onClick={()=>setF("estado", t)} style={{ padding:"5px 10px",borderRadius:5,border:"1px solid",borderColor:filters.estado===t?"#475569":"#cbd5e1",background:filters.estado===t?"#f1f5f9":"#f8fafc",color:filters.estado===t?"#1e293b":"#94a3b8",fontFamily:"'DM Mono',monospace",fontSize:9,cursor:"pointer",textTransform:"uppercase" }}>{t==="TODOS"?"Estado":t}</button>
                 ))}
               </div>
 
@@ -823,12 +819,12 @@ function ObraView({ obra, onBack, setError }) {
             </div>
             {/* Filtros */}
             <div style={{ display:"flex",gap:6,marginBottom:14,flexWrap:"wrap" }}>
-              <input placeholder="Buscar…" value={search} onChange={e=>setSearch(e.target.value)} style={{ ...inp,width:160,margin:0 }}/>
-              <select value={filterLote} onChange={e=>setFilterLote(e.target.value)} style={{ ...inp,margin:0,width:"auto" }}>{lotes.map(t=><option key={t} value={t}>{t==="TODOS"?"Lote: Todos":t}</option>)}</select>
-              <select value={filterTorre} onChange={e=>setFilterTorre(e.target.value)} style={{ ...inp,margin:0,width:"auto" }}>{torres.map(t=><option key={t} value={t}>{t==="TODAS"?"Torre: Todas":t}</option>)}</select>
-              <select value={filterPiso} onChange={e=>setFilterPiso(e.target.value)} style={{ ...inp,margin:0,width:"auto" }}>{pisos.map(t=><option key={t} value={t}>{t==="TODOS"?"Piso: Todos":t}</option>)}</select>
-              {["TODOS","MD","MDT","P"].map(t=><button key={t} onClick={()=>setFilterTipo(t)} style={{ padding:"5px 10px",borderRadius:5,border:"1px solid",borderColor:filterTipo===t?"#d97706":"#cbd5e1",background:filterTipo===t?"#fef3c7":"#f8fafc",color:filterTipo===t?"#d97706":"#64748b",fontFamily:"'DM Mono',monospace",fontSize:10,cursor:"pointer" }}>{t}</button>)}
-              {["TODOS","pendiente","recibido","montado"].map(t=><button key={t} onClick={()=>setFilterEstado(t)} style={{ padding:"5px 10px",borderRadius:5,border:"1px solid",borderColor:filterEstado===t?"#475569":"#cbd5e1",background:filterEstado===t?"#f1f5f9":"#f8fafc",color:filterEstado===t?"#1e293b":"#94a3b8",fontFamily:"'DM Mono',monospace",fontSize:9,cursor:"pointer",textTransform:"uppercase" }}>{t==="TODOS"?"Estado":t}</button>)}
+              <input placeholder="Buscar…" value={filters.search} onChange={e=>setF("search", e.target.value)} style={{ ...inp,width:160,margin:0 }}/>
+              <select value={filters.lote} onChange={e=>setF("lote", e.target.value)} style={{ ...inp,margin:0,width:"auto" }}>{lotes.map(t=><option key={t} value={t}>{t==="TODOS"?"Lote: Todos":t}</option>)}</select>
+              <select value={filters.torre} onChange={e=>setF("torre", e.target.value)} style={{ ...inp,margin:0,width:"auto" }}>{torres.map(t=><option key={t} value={t}>{t==="TODAS"?"Torre: Todas":t}</option>)}</select>
+              <select value={filters.piso} onChange={e=>setF("piso", e.target.value)} style={{ ...inp,margin:0,width:"auto" }}>{pisos.map(t=><option key={t} value={t}>{t==="TODOS"?"Piso: Todos":t}</option>)}</select>
+              {["TODOS","MD","MDT","P"].map(t=><button key={t} onClick={()=>setF("tipo", t)} style={{ padding:"5px 10px",borderRadius:5,border:"1px solid",borderColor:filters.tipo===t?"#d97706":"#cbd5e1",background:filters.tipo===t?"#fef3c7":"#f8fafc",color:filters.tipo===t?"#d97706":"#64748b",fontFamily:"'DM Mono',monospace",fontSize:10,cursor:"pointer" }}>{t}</button>)}
+              {["TODOS","pendiente","recibido","montado"].map(t=><button key={t} onClick={()=>setF("estado", t)} style={{ padding:"5px 10px",borderRadius:5,border:"1px solid",borderColor:filters.estado===t?"#475569":"#cbd5e1",background:filters.estado===t?"#f1f5f9":"#f8fafc",color:filters.estado===t?"#1e293b":"#94a3b8",fontFamily:"'DM Mono',monospace",fontSize:9,cursor:"pointer",textTransform:"uppercase" }}>{t==="TODOS"?"Estado":t}</button>)}
             </div>
             <div style={{ overflowX:"auto" }}>
               <table style={{ width:"100%",borderCollapse:"collapse",fontSize:11 }}>
