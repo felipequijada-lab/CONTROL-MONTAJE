@@ -172,10 +172,16 @@ function generatePDF(weekData, elements, dailyStats, programaAcum, weekLabel) {
 <div class="footer">Informe generado automáticamente · Control de Montaje · Baumax SPA · Semana ${weekLabel}</div>
 </body></html>`;
 
-  const win = window.open('', '_blank');
-  win.document.write(html);
-  win.document.close();
-  win.onload = () => win.print();
+  const iframe = document.createElement('iframe');
+  iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;opacity:0;';
+  document.body.appendChild(iframe);
+  const doc = iframe.contentWindow.document;
+  doc.open(); doc.write(html); doc.close();
+  setTimeout(() => {
+    iframe.contentWindow.focus();
+    iframe.contentWindow.print();
+    setTimeout(() => document.body.removeChild(iframe), 1000);
+  }, 500);
 }
 
 // ── Excel Generator ───────────────────────────────────────────────────────────
