@@ -423,48 +423,48 @@ export default function ObraTracker() {
   }
 
   if (loading) return (
-    <div style={{ minHeight:"100vh", background:"#0d0f14", display:"flex", alignItems:"center", justifyContent:"center" }}>
-      <div style={{ color:"#e8b84b", fontFamily:"'DM Mono',monospace", fontSize:14, letterSpacing:3 }}>CARGANDO DATOS…</div>
+    <div style={{ minHeight:"100vh", background:"#0f1c2e", display:"flex", alignItems:"center", justifyContent:"center" }}>
+      <div style={{ color:"#f0c84e", fontFamily:"'DM Mono',monospace", fontSize:14, letterSpacing:3 }}>CARGANDO DATOS…</div>
     </div>
   );
 
   const currentWeekData = weeklyStats.find(w=>w.week===selectedWeek);
 
   return (
-    <div style={{ minHeight:"100vh", background:"#0d0f14", color:"#ddd8cc", fontFamily:"'DM Mono','Courier New',monospace" }}>
+    <div style={{ minHeight:"100vh", background:"#0f1c2e", color:"#e8f4fd", fontFamily:"'DM Mono','Courier New',monospace" }}>
       <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Archivo+Black&display=swap" rel="stylesheet"/>
       {error && (
-        <div style={{ background:"#3a1a1a", color:"#f87171", padding:"10px 28px", fontSize:11, borderBottom:"1px solid #5a2a2a" }}>
-          ⚠ {error} <button onClick={()=>setError(null)} style={{ marginLeft:12, background:"none", border:"none", color:"#f87171", cursor:"pointer" }}>×</button>
+        <div style={{ background:"#3a1a1a", color:"#ff7070", padding:"10px 28px", fontSize:11, borderBottom:"1px solid #5a2a2a" }}>
+          ⚠ {error} <button onClick={()=>setError(null)} style={{ marginLeft:12, background:"none", border:"none", color:"#ff7070", cursor:"pointer" }}>×</button>
         </div>
       )}
 
       {/* HEADER */}
-      <div style={{ background:"#13151e", borderBottom:"1px solid #222536", padding:"16px 28px", display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:12 }}>
+      <div style={{ background:"#162438", borderBottom:"1px solid #222536", padding:"16px 28px", display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:12 }}>
         <div>
-          <div style={{ fontFamily:"'Archivo Black',sans-serif", fontSize:20, color:"#e8b84b", letterSpacing:1 }}>◈ CONTROL DE MONTAJE</div>
-          <div style={{ fontSize:10, color:"#555", letterSpacing:3, marginTop:2 }}>BAUMAX · MD · PRELOSAS · SEGUIMIENTO DIARIO</div>
+          <div style={{ fontFamily:"'Archivo Black',sans-serif", fontSize:20, color:"#f0c84e", letterSpacing:1 }}>◈ CONTROL DE MONTAJE</div>
+          <div style={{ fontSize:10, color:"#4d7fa8", letterSpacing:3, marginTop:2 }}>BAUMAX · MD · PRELOSAS · SEGUIMIENTO DIARIO</div>
         </div>
         <div style={{ display:"flex", gap:8, flexWrap:"wrap", alignItems:"center" }}>
-          <TypeKPI label="MUROS DOBLES (m² bruto)" mounted={stats.md.areaMounted} total={stats.md.areaTotal} count={stats.md.mounted} countTotal={stats.md.total} pct={pctMD} color="#4ade80"/>
-          <div style={{ width:1, background:"#222536", height:40 }}/>
-          <TypeKPI label="PRELOSAS (m² neto)" mounted={stats.p.areaMounted} total={stats.p.areaTotal} count={stats.p.mounted} countTotal={stats.p.total} pct={pctP} color="#60a5fa"/>
-          <div style={{ width:1, background:"#222536", height:40 }}/>
-          <TypeKPI label="AVANCE TOTAL" mounted={stats.all.areaMounted} total={stats.all.areaTotal} count={stats.all.mounted} countTotal={stats.all.total} pct={pctAll} color="#e8b84b" large/>
+          <TypeKPI label="MUROS DOBLES (m² bruto)" mounted={stats.md.areaMounted} total={stats.md.areaTotal} count={stats.md.mounted} countTotal={stats.md.total} pct={pctMD} color="#3dd68c"/>
+          <div style={{ width:1, background:"#1e4976", height:40 }}/>
+          <TypeKPI label="PRELOSAS (m² neto)" mounted={stats.p.areaMounted} total={stats.p.areaTotal} count={stats.p.mounted} countTotal={stats.p.total} pct={pctP} color="#60b8ff"/>
+          <div style={{ width:1, background:"#1e4976", height:40 }}/>
+          <TypeKPI label="AVANCE TOTAL" mounted={stats.all.areaMounted} total={stats.all.areaTotal} count={stats.all.mounted} countTotal={stats.all.total} pct={pctAll} color="#f0c84e" large/>
         </div>
       </div>
 
       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", height:5 }}>
-        <div style={{ background:"#1a1d26" }}><div style={{ height:5, width:pctMD+"%", background:"linear-gradient(90deg,#16a34a,#4ade80)", transition:"width 0.6s" }}/></div>
-        <div style={{ background:"#1a1d26" }}><div style={{ height:5, width:pctP+"%", background:"linear-gradient(90deg,#1d4ed8,#60a5fa)", transition:"width 0.6s" }}/></div>
+        <div style={{ background:"#1e3150" }}><div style={{ height:5, width:pctMD+"%", background:"linear-gradient(90deg,#1a9e5c,#3dd68c)", transition:"width 0.6s" }}/></div>
+        <div style={{ background:"#1e3150" }}><div style={{ height:5, width:pctP+"%", background:"linear-gradient(90deg,#1a6fd8,#60b8ff)", transition:"width 0.6s" }}/></div>
       </div>
 
       {/* TABS */}
-      <div style={{ display:"flex", background:"#13151e", borderBottom:"1px solid #222536", padding:"0 28px" }}>
+      <div style={{ display:"flex", background:"#162438", borderBottom:"1px solid #222536", padding:"0 28px" }}>
         {[["registro","▷ REGISTRO DIARIO"],["elementos","◈ ELEMENTOS"],["historial","◫ HISTORIAL"],["semanal","◷ SEMANAL"]].map(([k,l]) => (
           <button key={k} onClick={()=>setActiveTab(k)} style={{
             background:"none", border:"none", cursor:"pointer", padding:"12px 18px",
-            color: activeTab===k ? "#e8b84b" : "#555",
+            color: activeTab===k ? "#f0c84e" : "#4d7fa8",
             borderBottom: activeTab===k ? "2px solid #e8b84b" : "2px solid transparent",
             fontFamily:"'DM Mono',monospace", fontSize:11, letterSpacing:2, transition:"color 0.2s"
           }}>{l}</button>
@@ -483,12 +483,12 @@ export default function ObraTracker() {
               <Panel title="PARÁMETROS DEL DÍA">
                 <Label>Fecha</Label>
                 <input type="date" value={selectedDate} onChange={e=>setSelectedDate(e.target.value)} style={inp}/>
-                <div style={{ fontSize:9, color:"#555", letterSpacing:2, marginTop:4 }}>SEMANA {getWeekNumber(selectedDate)}</div>
+                <div style={{ fontSize:9, color:"#4d7fa8", letterSpacing:2, marginTop:4 }}>SEMANA {getWeekNumber(selectedDate)}</div>
                 <Label>PERSONAL EN OBRA</Label>
                 <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:6, marginTop:4 }}>
                   {PERSONAL_CARGOS.map(cargo => (
                     <div key={cargo.key}>
-                      <div style={{ fontSize:9, color: cargo.productivo ? "#e8b84b" : "#555", letterSpacing:1, marginBottom:2 }}>
+                      <div style={{ fontSize:9, color: cargo.productivo ? "#f0c84e" : "#4d7fa8", letterSpacing:1, marginBottom:2 }}>
                         {cargo.label.toUpperCase()} {cargo.productivo ? "★" : ""}
                       </div>
                       <input type="number" min={0} max={cargo.max} value={personal[cargo.key]}
@@ -497,23 +497,23 @@ export default function ObraTracker() {
                     </div>
                   ))}
                 </div>
-                <div style={{ fontSize:9, color:"#555", marginTop:4 }}>★ Cargos productivos</div>
+                <div style={{ fontSize:9, color:"#4d7fa8", marginTop:4 }}>★ Cargos productivos</div>
                 <Label>Incidencias / Nota</Label>
                 <textarea value={note} onChange={e=>setNote(e.target.value)} rows={2}
                   placeholder="Observaciones del día, incidentes…"
                   style={{ ...inp, resize:"vertical", fontFamily:"'DM Mono',monospace", fontSize:11 }}/>
                 {selectedPos.length > 0 && (
-                  <div style={{ background:"#1a1d26", borderRadius:6, padding:10, marginTop:8, fontSize:11 }}>
-                    <div style={{ color:"#555", fontSize:9, letterSpacing:2, marginBottom:6 }}>SELECCIÓN ACTUAL</div>
-                    {selSummary.md > 0 && <div style={{ color:"#4ade80" }}>MD: {selSummary.md} elem · {fmt2(selSummary.areaMD)} m² bruto</div>}
-                    {selSummary.p  > 0 && <div style={{ color:"#60a5fa", marginTop:3 }}>P: {selSummary.p} elem · {fmt2(selSummary.areaP)} m² neto</div>}
-                    <div style={{ color:"#e8b84b", marginTop:3, borderTop:"1px solid #2a2d3a", paddingTop:6 }}>Total: {fmt2(selSummary.areaMD+selSummary.areaP)} m²</div>
+                  <div style={{ background:"#1e3150", borderRadius:6, padding:10, marginTop:8, fontSize:11 }}>
+                    <div style={{ color:"#4d7fa8", fontSize:9, letterSpacing:2, marginBottom:6 }}>SELECCIÓN ACTUAL</div>
+                    {selSummary.md > 0 && <div style={{ color:"#3dd68c" }}>MD: {selSummary.md} elem · {fmt2(selSummary.areaMD)} m² bruto</div>}
+                    {selSummary.p  > 0 && <div style={{ color:"#60b8ff", marginTop:3 }}>P: {selSummary.p} elem · {fmt2(selSummary.areaP)} m² neto</div>}
+                    <div style={{ color:"#f0c84e", marginTop:3, borderTop:"1px solid #2a2d3a", paddingTop:6 }}>Total: {fmt2(selSummary.areaMD+selSummary.areaP)} m²</div>
                   </div>
                 )}
                 <button onClick={registrar} disabled={selectedPos.length===0||saving} style={{
                   width:"100%", padding:"11px", marginTop:10,
-                  background: selectedPos.length>0&&!saving ? "#e8b84b" : "#1e2130",
-                  color: selectedPos.length>0&&!saving ? "#0d0f14" : "#444",
+                  background: selectedPos.length>0&&!saving ? "#f0c84e" : "#1e3150",
+                  color: selectedPos.length>0&&!saving ? "#0f1c2e" : "#3d6a8a",
                   border:"none", borderRadius:6, cursor: selectedPos.length>0&&!saving?"pointer":"default",
                   fontFamily:"'Archivo Black',sans-serif", fontSize:13, letterSpacing:1, transition:"all 0.2s"
                 }}>{saving ? "GUARDANDO…" : `▷ REGISTRAR ${selectedPos.length>0?"("+selectedPos.length+")":""}`}</button>
@@ -521,18 +521,18 @@ export default function ObraTracker() {
               {dailyStats.filter(d=>d.date===selectedDate).map(d=>(
                 <Panel key={d.date} title="RESUMEN HOY">
                   <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:10 }}>
-                    <MiniStat label="m² MD" value={fmt2(d.areaMD)} color="#4ade80" small/>
-                    <MiniStat label="m² P" value={fmt2(d.areaP)} color="#60a5fa" small/>
-                    <MiniStat label="m² TOTAL" value={fmt2(d.areaTotal)} color="#e8b84b" small/>
+                    <MiniStat label="m² MD" value={fmt2(d.areaMD)} color="#3dd68c" small/>
+                    <MiniStat label="m² P" value={fmt2(d.areaP)} color="#60b8ff" small/>
+                    <MiniStat label="m² TOTAL" value={fmt2(d.areaTotal)} color="#f0c84e" small/>
                     <MiniStat label="Equipo" value={d.equipoCompleto+" pers."} small/>
                   </div>
                   <div style={{ borderTop:"1px solid #1e2130", paddingTop:8 }}>
-                    <div style={{ fontSize:9, color:"#555", letterSpacing:2, marginBottom:6 }}>RENDIMIENTOS m²/persona</div>
+                    <div style={{ fontSize:9, color:"#4d7fa8", letterSpacing:2, marginBottom:6 }}>RENDIMIENTOS m²/persona</div>
                     <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:6 }}>
-                      <MiniStat label="Por Líder" value={fmt2(d.rendLider)} color="#e8b84b" small/>
-                      <MiniStat label="Por Montajista" value={fmt2(d.rendMontajista)} color="#e8b84b" small/>
-                      <MiniStat label="Por Ayudante" value={fmt2(d.rendAyudante)} color="#e8b84b" small/>
-                      <MiniStat label="Por Equipo" value={fmt2(d.rendEquipo)} color="#e8b84b" small/>
+                      <MiniStat label="Por Líder" value={fmt2(d.rendLider)} color="#f0c84e" small/>
+                      <MiniStat label="Por Montajista" value={fmt2(d.rendMontajista)} color="#f0c84e" small/>
+                      <MiniStat label="Por Ayudante" value={fmt2(d.rendAyudante)} color="#f0c84e" small/>
+                      <MiniStat label="Por Equipo" value={fmt2(d.rendEquipo)} color="#f0c84e" small/>
                     </div>
                   </div>
                 </Panel>
@@ -544,9 +544,9 @@ export default function ObraTracker() {
                 {["TODOS","MD","P"].map(t => (
                   <button key={t} onClick={()=>setFilterTipo(t)} style={{
                     padding:"6px 14px", borderRadius:5, border:"1px solid",
-                    borderColor: filterTipo===t?(t==="MD"?"#4ade80":t==="P"?"#60a5fa":"#e8b84b"):"#222536",
-                    background: filterTipo===t?"#1a1d26":"transparent",
-                    color: filterTipo===t?(t==="MD"?"#4ade80":t==="P"?"#60a5fa":"#e8b84b"):"#555",
+                    borderColor: filterTipo===t?(t==="MD"?"#3dd68c":t==="P"?"#60b8ff":"#f0c84e"):"#1e4976",
+                    background: filterTipo===t?"#1e3150":"transparent",
+                    color: filterTipo===t?(t==="MD"?"#3dd68c":t==="P"?"#60b8ff":"#f0c84e"):"#4d7fa8",
                     fontFamily:"'DM Mono',monospace", fontSize:11, cursor:"pointer"
                   }}>{t}</button>
                 ))}
@@ -554,7 +554,7 @@ export default function ObraTracker() {
               <div style={{ maxHeight:600, overflowY:"auto" }}>
                 <table style={{ width:"100%", borderCollapse:"collapse", fontSize:11 }}>
                   <thead>
-                    <tr style={{ color:"#444", fontSize:9, letterSpacing:2 }}>
+                    <tr style={{ color:"#3d6a8a", fontSize:9, letterSpacing:2 }}>
                       <Th>SEL</Th><Th>TIPO</Th><Th>POS.</Th><Th>PLANO</Th><Th>PESO Tn</Th><Th>ALT m</Th><Th>LONG m</Th><Th>Á.BRUTA m²</Th><Th>Á.NETA m²</Th><Th>ESTADO</Th>
                     </tr>
                   </thead>
@@ -562,29 +562,29 @@ export default function ObraTracker() {
                     {filteredElements.map(el => {
                       const isMounted = mountedPos.has(el.pos);
                       const isSelected = selectedPos.includes(el.pos);
-                      const tc = el.tipo==="MD"?"#4ade80":"#60a5fa";
+                      const tc = el.tipo==="MD"?"#3dd68c":"#60b8ff";
                       return (
                         <tr key={el.pos} onClick={()=>!isMounted&&togglePos(el.pos)} style={{
-                          background: isSelected?"#1a2218":isMounted?"#161820":"transparent",
+                          background: isSelected?"#1a3a28":isMounted?"#1a2d45":"transparent",
                           borderBottom:"1px solid #181b24", cursor:isMounted?"default":"pointer",
                           opacity:isMounted?0.45:1, transition:"background 0.15s"
                         }}>
-                          <Td><div style={{ width:14,height:14,borderRadius:3,border:`2px solid ${isSelected?"#e8b84b":"#333"}`,background:isSelected?"#e8b84b":"transparent",display:"flex",alignItems:"center",justifyContent:"center" }}>{isSelected&&<span style={{ fontSize:9,color:"#0d0f14",fontWeight:"bold" }}>✓</span>}</div></Td>
+                          <Td><div style={{ width:14,height:14,borderRadius:3,border:`2px solid ${isSelected?"#f0c84e":"#333"}`,background:isSelected?"#f0c84e":"transparent",display:"flex",alignItems:"center",justifyContent:"center" }}>{isSelected&&<span style={{ fontSize:9,color:"#0f1c2e",fontWeight:"bold" }}>✓</span>}</div></Td>
                           <Td><span style={{ color:tc,fontSize:9,border:`1px solid ${tc}44`,padding:"1px 6px",borderRadius:8 }}>{el.tipo}</span></Td>
-                          <Td accent="#ddd8cc">{el.pos}</Td>
+                          <Td accent="#e8f4fd">{el.pos}</Td>
                           <Td>{el.plano}</Td><Td>{el.peso}</Td><Td>{el.altura}</Td><Td>{el.longitud}</Td>
                           <Td accent={el.tipo==="MD"?"#4ade8099":undefined}>{fmt2(el.areaBruta)}</Td>
                           <Td accent={el.tipo==="P"?"#60a5fa99":undefined}>{fmt2(el.areaNeta)}</Td>
-                          <Td><span style={{ padding:"1px 7px",borderRadius:10,fontSize:9,background:isMounted?"#14281a":"#1e1e1e",color:isMounted?"#4ade80":"#555",border:`1px solid ${isMounted?"#22c55e33":"#2a2d3a"}` }}>{isMounted?"MONTADO":"PENDIENTE"}</span></Td>
+                          <Td><span style={{ padding:"1px 7px",borderRadius:10,fontSize:9,background:isMounted?"#1a3a28":"#162438",color:isMounted?"#3dd68c":"#4d7fa8",border:`1px solid ${isMounted?"#3dd68c33":"#1e4976"}` }}>{isMounted?"MONTADO":"PENDIENTE"}</span></Td>
                         </tr>
                       );
                     })}
                   </tbody>
                   <tfoot>
                     <tr style={{ borderTop:"1px solid #2a2d3a" }}>
-                      <td colSpan={7} style={{ padding:"8px 10px",color:"#555",textAlign:"right",fontSize:10,letterSpacing:1 }}>TOTALES FILTRADOS</td>
-                      <td style={{ padding:"8px 10px",color:"#4ade80",fontSize:11,fontWeight:"bold" }}>{fmt2(filteredElements.filter(e=>e.tipo==="MD").reduce((s,e)=>s+e.areaBruta,0))} m²</td>
-                      <td style={{ padding:"8px 10px",color:"#60a5fa",fontSize:11,fontWeight:"bold" }}>{fmt2(filteredElements.filter(e=>e.tipo==="P").reduce((s,e)=>s+e.areaNeta,0))} m²</td>
+                      <td colSpan={7} style={{ padding:"8px 10px",color:"#4d7fa8",textAlign:"right",fontSize:10,letterSpacing:1 }}>TOTALES FILTRADOS</td>
+                      <td style={{ padding:"8px 10px",color:"#3dd68c",fontSize:11,fontWeight:"bold" }}>{fmt2(filteredElements.filter(e=>e.tipo==="MD").reduce((s,e)=>s+e.areaBruta,0))} m²</td>
+                      <td style={{ padding:"8px 10px",color:"#60b8ff",fontSize:11,fontWeight:"bold" }}>{fmt2(filteredElements.filter(e=>e.tipo==="P").reduce((s,e)=>s+e.areaNeta,0))} m²</td>
                       <td/>
                     </tr>
                   </tfoot>
@@ -602,9 +602,9 @@ export default function ObraTracker() {
               {["TODOS","MD","P"].map(t => (
                 <button key={t} onClick={()=>setFilterTipo(t)} style={{
                   padding:"6px 14px", borderRadius:5, border:"1px solid",
-                  borderColor: filterTipo===t?(t==="MD"?"#4ade80":t==="P"?"#60a5fa":"#e8b84b"):"#222536",
-                  background: filterTipo===t?"#1a1d26":"transparent",
-                  color: filterTipo===t?(t==="MD"?"#4ade80":t==="P"?"#60a5fa":"#e8b84b"):"#555",
+                  borderColor: filterTipo===t?(t==="MD"?"#3dd68c":t==="P"?"#60b8ff":"#f0c84e"):"#1e4976",
+                  background: filterTipo===t?"#1e3150":"transparent",
+                  color: filterTipo===t?(t==="MD"?"#3dd68c":t==="P"?"#60b8ff":"#f0c84e"):"#4d7fa8",
                   fontFamily:"'DM Mono',monospace", fontSize:11, cursor:"pointer"
                 }}>{t}</button>
               ))}
@@ -612,7 +612,7 @@ export default function ObraTracker() {
             <div style={{ overflowX:"auto" }}>
               <table style={{ width:"100%", borderCollapse:"collapse", fontSize:11 }}>
                 <thead>
-                  <tr style={{ color:"#444", fontSize:9, letterSpacing:2 }}>
+                  <tr style={{ color:"#3d6a8a", fontSize:9, letterSpacing:2 }}>
                     <Th>TIPO</Th><Th>POSICIÓN</Th><Th>PLANO</Th><Th>PESO Tn</Th><Th>ALT m</Th><Th>LONG m</Th><Th>ESP cm</Th><Th>Á.BRUTA m²</Th><Th>Á.NETA m²</Th><Th>ESTADO</Th><Th>ACCIÓN</Th>
                   </tr>
                 </thead>
@@ -620,16 +620,16 @@ export default function ObraTracker() {
                   {filteredElements.map(el => {
                     const isMounted = mountedPos.has(el.pos);
                     const logEntry = logs.find(l=>l.pos===el.pos);
-                    const tc = el.tipo==="MD"?"#4ade80":"#60a5fa";
+                    const tc = el.tipo==="MD"?"#3dd68c":"#60b8ff";
                     return (
                       <tr key={el.pos} style={{ borderBottom:"1px solid #181b24" }}>
                         <Td><span style={{ color:tc,fontSize:9,border:`1px solid ${tc}44`,padding:"1px 6px",borderRadius:8 }}>{el.tipo}</span></Td>
-                        <Td accent="#ddd8cc">{el.pos}</Td>
+                        <Td accent="#e8f4fd">{el.pos}</Td>
                         <Td>{el.plano}</Td><Td>{el.peso}</Td><Td>{el.altura}</Td><Td>{el.longitud}</Td><Td>{el.espesor}</Td>
                         <Td accent={el.tipo==="MD"?"#4ade8099":undefined}>{fmt2(el.areaBruta)}</Td>
                         <Td accent={el.tipo==="P"?"#60a5fa99":undefined}>{fmt2(el.areaNeta)}</Td>
-                        <Td><span style={{ padding:"1px 7px",borderRadius:10,fontSize:9,background:isMounted?"#14281a":"#1e1e1e",color:isMounted?"#4ade80":"#555",border:`1px solid ${isMounted?"#22c55e33":"#2a2d3a"}` }}>{isMounted?`MONTADO ${logEntry?.date||""}`:"PENDIENTE"}</span></Td>
-                        <Td>{isMounted&&<button onClick={()=>desmontar(el.pos)} style={{ background:"none",border:"1px solid #3a1a1a",color:"#f87171",padding:"2px 8px",borderRadius:4,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontSize:9 }}>desmontar</button>}</Td>
+                        <Td><span style={{ padding:"1px 7px",borderRadius:10,fontSize:9,background:isMounted?"#1a3a28":"#162438",color:isMounted?"#3dd68c":"#4d7fa8",border:`1px solid ${isMounted?"#3dd68c33":"#1e4976"}` }}>{isMounted?`MONTADO ${logEntry?.date||""}`:"PENDIENTE"}</span></Td>
+                        <Td>{isMounted&&<button onClick={()=>desmontar(el.pos)} style={{ background:"none",border:"1px solid #3a1a1a",color:"#ff7070",padding:"2px 8px",borderRadius:4,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontSize:9 }}>desmontar</button>}</Td>
                       </tr>
                     );
                   })}
@@ -643,25 +643,25 @@ export default function ObraTracker() {
         {activeTab === "historial" && (
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:20 }}>
             <Panel title="RENDIMIENTO POR DÍA">
-              {dailyStats.length===0 && <div style={{ color:"#555", fontSize:12 }}>Sin registros aún.</div>}
+              {dailyStats.length===0 && <div style={{ color:"#4d7fa8", fontSize:12 }}>Sin registros aún.</div>}
               {dailyStats.map(d=>(
                 <div key={d.date} style={{ padding:"12px 0", borderBottom:"1px solid #181b24" }}>
                   <div style={{ display:"flex", justifyContent:"space-between", marginBottom:6 }}>
-                    <span style={{ color:"#e8b84b", fontSize:12 }}>{d.date}</span>
-                    <span style={{ color:"#555", fontSize:10 }}>Semana {getWeekNumber(d.date)}</span>
+                    <span style={{ color:"#f0c84e", fontSize:12 }}>{d.date}</span>
+                    <span style={{ color:"#4d7fa8", fontSize:10 }}>Semana {getWeekNumber(d.date)}</span>
                   </div>
                   <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:6, marginBottom:8 }}>
-                    <MiniStat label="m² MD" value={fmt2(d.areaMD)} color="#4ade80" small/>
-                    <MiniStat label="m² P" value={fmt2(d.areaP)} color="#60a5fa" small/>
-                    <MiniStat label="m² TOTAL" value={fmt2(d.areaTotal)} color="#e8b84b" small/>
+                    <MiniStat label="m² MD" value={fmt2(d.areaMD)} color="#3dd68c" small/>
+                    <MiniStat label="m² P" value={fmt2(d.areaP)} color="#60b8ff" small/>
+                    <MiniStat label="m² TOTAL" value={fmt2(d.areaTotal)} color="#f0c84e" small/>
                   </div>
-                  <div style={{ background:"#1a1d26", borderRadius:6, padding:8 }}>
-                    <div style={{ fontSize:9, color:"#555", letterSpacing:2, marginBottom:6 }}>RENDIMIENTOS m²/persona</div>
+                  <div style={{ background:"#1e3150", borderRadius:6, padding:8 }}>
+                    <div style={{ fontSize:9, color:"#4d7fa8", letterSpacing:2, marginBottom:6 }}>RENDIMIENTOS m²/persona</div>
                     <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr 1fr", gap:6 }}>
-                      <MiniStat label={`Líder (${d.personal.lideres})`} value={fmt2(d.rendLider)} color="#e8b84b" small/>
-                      <MiniStat label={`Montaj. (${d.personal.montajistas})`} value={fmt2(d.rendMontajista)} color="#e8b84b" small/>
-                      <MiniStat label={`Ayud. (${d.personal.ayudantes})`} value={fmt2(d.rendAyudante)} color="#e8b84b" small/>
-                      <MiniStat label={`Equipo (${d.equipoCompleto})`} value={fmt2(d.rendEquipo)} color="#e8b84b" small/>
+                      <MiniStat label={`Líder (${d.personal.lideres})`} value={fmt2(d.rendLider)} color="#f0c84e" small/>
+                      <MiniStat label={`Montaj. (${d.personal.montajistas})`} value={fmt2(d.rendMontajista)} color="#f0c84e" small/>
+                      <MiniStat label={`Ayud. (${d.personal.ayudantes})`} value={fmt2(d.rendAyudante)} color="#f0c84e" small/>
+                      <MiniStat label={`Equipo (${d.equipoCompleto})`} value={fmt2(d.rendEquipo)} color="#f0c84e" small/>
                     </div>
                   </div>
                 </div>
@@ -675,14 +675,14 @@ export default function ObraTracker() {
                 const areaTotal = elems.reduce((s,e)=>s+(tipo==="MD"?e.areaBruta:e.areaNeta),0);
                 const areaMounted = mounted.reduce((s,e)=>s+(tipo==="MD"?e.areaBruta:e.areaNeta),0);
                 const p = areaTotal>0?(areaMounted/areaTotal)*100:0;
-                const color = tipo==="MD"?"#4ade80":"#60a5fa";
+                const color = tipo==="MD"?"#3dd68c":"#60b8ff";
                 return (
                   <div key={pl} style={{ marginBottom:14 }}>
                     <div style={{ display:"flex", justifyContent:"space-between", fontSize:11, marginBottom:4 }}>
-                      <span style={{ color:"#ddd8cc" }}>{pl} <span style={{ color, fontSize:9 }}>{tipo}</span></span>
+                      <span style={{ color:"#e8f4fd" }}>{pl} <span style={{ color, fontSize:9 }}>{tipo}</span></span>
                       <span style={{ color, fontSize:10 }}>{mounted.length}/{elems.length} · {fmt2(areaMounted)}/{fmt2(areaTotal)} m² · {fmtPct(p)}</span>
                     </div>
-                    <div style={{ background:"#1e2130", borderRadius:4, height:7 }}>
+                    <div style={{ background:"#1e3150", borderRadius:4, height:7 }}>
                       <div style={{ height:7, borderRadius:4, width:p+"%", background:color, opacity:0.8, transition:"width 0.5s" }}/>
                     </div>
                   </div>
@@ -712,7 +712,7 @@ export default function ObraTracker() {
                   if(!currentWeekData){ alert("Sin datos para esta semana"); return; }
                   generatePDF(currentWeekData, elements, dailyStats, programaAcum, selectedWeek);
                 }} style={{
-                  background:"#1a1d26", border:"1px solid #e8b84b44", color:"#e8b84b",
+                  background:"#1e3150", border:"1px solid #e8b84b44", color:"#f0c84e",
                   padding:"8px 16px", borderRadius:6, cursor:"pointer",
                   fontFamily:"'DM Mono',monospace", fontSize:11, letterSpacing:1,
                 }}>↓ PDF SEMANAL</button>
@@ -720,7 +720,7 @@ export default function ObraTracker() {
                   if(!currentWeekData){ alert("Sin datos para esta semana"); return; }
                   generateExcel(currentWeekData, elements, dailyStats, selectedWeek);
                 }} style={{
-                  background:"#1a1d26", border:"1px solid #4ade8044", color:"#4ade80",
+                  background:"#1e3150", border:"1px solid #4ade8044", color:"#3dd68c",
                   padding:"8px 16px", borderRadius:6, cursor:"pointer",
                   fontFamily:"'DM Mono',monospace", fontSize:11, letterSpacing:1,
                 }}>↓ EXCEL SEMANAL</button>
@@ -728,34 +728,34 @@ export default function ObraTracker() {
             </div>
 
             <Panel title="RESUMEN SEMANAL">
-              {weeklyStats.length===0 && <div style={{ color:"#555", fontSize:12 }}>Sin registros aún.</div>}
+              {weeklyStats.length===0 && <div style={{ color:"#4d7fa8", fontSize:12 }}>Sin registros aún.</div>}
               <table style={{ width:"100%", borderCollapse:"collapse", fontSize:11 }}>
                 <thead>
-                  <tr style={{ color:"#444", fontSize:9, letterSpacing:2 }}>
+                  <tr style={{ color:"#3d6a8a", fontSize:9, letterSpacing:2 }}>
                     <Th>SEMANA</Th><Th>m² MD</Th><Th>m² P</Th><Th>m² TOTAL</Th><Th>DÍAS EFEC.</Th><Th>REND. EFECTIVO m²/día</Th><Th>REND. EQUIPO m²/p</Th>
                   </tr>
                 </thead>
                 <tbody>
                   {weeklyStats.map(w=>(
-                    <tr key={w.week} style={{ borderBottom:"1px solid #181b24", background:w.week===selectedWeek?"#1a1d26":"transparent" }}
+                    <tr key={w.week} style={{ borderBottom:"1px solid #181b24", background:w.week===selectedWeek?"#1e3150":"transparent" }}
                       onClick={()=>setSelectedWeek(w.week)}>
-                      <Td accent="#e8b84b">{w.week}</Td>
-                      <Td accent="#4ade80">{fmt2(w.areaMD)}</Td>
-                      <Td accent="#60a5fa">{fmt2(w.areaP)}</Td>
-                      <Td accent="#e8b84b">{fmt2(w.areaTotal)}</Td>
+                      <Td accent="#f0c84e">{w.week}</Td>
+                      <Td accent="#3dd68c">{fmt2(w.areaMD)}</Td>
+                      <Td accent="#60b8ff">{fmt2(w.areaP)}</Td>
+                      <Td accent="#f0c84e">{fmt2(w.areaTotal)}</Td>
                       <Td>{w.diasEfectivos}</Td>
-                      <Td accent="#e8b84b">{fmt2(w.rendEfectivo)}</Td>
-                      <Td accent="#e8b84b">{fmt2(w.rendEquipo)}</Td>
+                      <Td accent="#f0c84e">{fmt2(w.rendEfectivo)}</Td>
+                      <Td accent="#f0c84e">{fmt2(w.rendEquipo)}</Td>
                     </tr>
                   ))}
                 </tbody>
                 {weeklyStats.length>0&&(
                   <tfoot>
                     <tr style={{ borderTop:"2px solid #2a2d3a" }}>
-                      <td style={{ padding:"8px 10px",color:"#555",fontSize:10 }}>TOTAL</td>
-                      <td style={{ padding:"8px 10px",color:"#4ade80",fontSize:11,fontWeight:"bold" }}>{fmt2(dailyStats.reduce((s,d)=>s+d.areaMD,0))} m²</td>
-                      <td style={{ padding:"8px 10px",color:"#60a5fa",fontSize:11,fontWeight:"bold" }}>{fmt2(dailyStats.reduce((s,d)=>s+d.areaP,0))} m²</td>
-                      <td style={{ padding:"8px 10px",color:"#e8b84b",fontSize:11,fontWeight:"bold" }}>{fmt2(dailyStats.reduce((s,d)=>s+d.areaTotal,0))} m²</td>
+                      <td style={{ padding:"8px 10px",color:"#4d7fa8",fontSize:10 }}>TOTAL</td>
+                      <td style={{ padding:"8px 10px",color:"#3dd68c",fontSize:11,fontWeight:"bold" }}>{fmt2(dailyStats.reduce((s,d)=>s+d.areaMD,0))} m²</td>
+                      <td style={{ padding:"8px 10px",color:"#60b8ff",fontSize:11,fontWeight:"bold" }}>{fmt2(dailyStats.reduce((s,d)=>s+d.areaP,0))} m²</td>
+                      <td style={{ padding:"8px 10px",color:"#f0c84e",fontSize:11,fontWeight:"bold" }}>{fmt2(dailyStats.reduce((s,d)=>s+d.areaTotal,0))} m²</td>
                       <td colSpan={3}/>
                     </tr>
                   </tfoot>
@@ -771,8 +771,8 @@ export default function ObraTracker() {
 
 function Panel({ title, children }) {
   return (
-    <div style={{ background:"#13151e", border:"1px solid #222536", borderRadius:10, padding:18, marginBottom:16 }}>
-      <div style={{ fontSize:9, letterSpacing:3, color:"#444", marginBottom:12, borderBottom:"1px solid #1e2130", paddingBottom:8 }}>{title}</div>
+    <div style={{ background:"#162438", border:"1px solid #222536", borderRadius:10, padding:18, marginBottom:16 }}>
+      <div style={{ fontSize:9, letterSpacing:3, color:"#3d6a8a", marginBottom:12, borderBottom:"1px solid #1e2130", paddingBottom:8 }}>{title}</div>
       {children}
     </div>
   );
@@ -780,26 +780,26 @@ function Panel({ title, children }) {
 function TypeKPI({ label, mounted, total, count, countTotal, pct, color, large }) {
   return (
     <div style={{ textAlign:"right", minWidth:140 }}>
-      <div style={{ fontSize:9, color:"#444", letterSpacing:1, marginBottom:2 }}>{label}</div>
-      <div style={{ fontSize:large?20:15, fontFamily:"'Archivo Black',sans-serif", color }}>{fmt2(mounted)} <span style={{ fontSize:9, color:"#555" }}>/ {fmt2(total)} m²</span></div>
-      <div style={{ fontSize:9, color:"#555" }}>{count}/{countTotal} elem · {fmtPct(pct)}</div>
+      <div style={{ fontSize:9, color:"#3d6a8a", letterSpacing:1, marginBottom:2 }}>{label}</div>
+      <div style={{ fontSize:large?20:15, fontFamily:"'Archivo Black',sans-serif", color }}>{fmt2(mounted)} <span style={{ fontSize:9, color:"#4d7fa8" }}>/ {fmt2(total)} m²</span></div>
+      <div style={{ fontSize:9, color:"#4d7fa8" }}>{count}/{countTotal} elem · {fmtPct(pct)}</div>
     </div>
   );
 }
-function Label({ children }) { return <div style={{ fontSize:9, color:"#555", letterSpacing:2, marginBottom:3, marginTop:10 }}>{children}</div>; }
-function Th({ children }) { return <th style={{ padding:"6px 8px", textAlign:"left", color:"#444", fontSize:9, letterSpacing:2, borderBottom:"1px solid #1e2130", whiteSpace:"nowrap" }}>{children}</th>; }
-function Td({ children, accent }) { return <td style={{ padding:"7px 8px", color:accent||"#666", fontSize:11, whiteSpace:"nowrap" }}>{children}</td>; }
+function Label({ children }) { return <div style={{ fontSize:9, color:"#4d7fa8", letterSpacing:2, marginBottom:3, marginTop:10 }}>{children}</div>; }
+function Th({ children }) { return <th style={{ padding:"6px 8px", textAlign:"left", color:"#3d6a8a", fontSize:9, letterSpacing:2, borderBottom:"1px solid #1e2130", whiteSpace:"nowrap" }}>{children}</th>; }
+function Td({ children, accent }) { return <td style={{ padding:"7px 8px", color:accent||"#7aa8c8", fontSize:11, whiteSpace:"nowrap" }}>{children}</td>; }
 function MiniStat({ label, value, color, small }) {
   return (
     <div style={{ marginBottom:small?0:4 }}>
-      <div style={{ fontSize:8, color:"#444", letterSpacing:2 }}>{label}</div>
-      <div style={{ fontSize:small?11:13, fontFamily:"'Archivo Black',sans-serif", color:color||"#ddd8cc" }}>{value}</div>
+      <div style={{ fontSize:8, color:"#3d6a8a", letterSpacing:2 }}>{label}</div>
+      <div style={{ fontSize:small?11:13, fontFamily:"'Archivo Black',sans-serif", color:color||"#e8f4fd" }}>{value}</div>
     </div>
   );
 }
 function ExportBtn({ onClick, label }) {
   return (
-    <button onClick={onClick} style={{ background:"#1a1d26", border:"1px solid #2a2d3a", color:"#888", padding:"6px 12px", borderRadius:5, cursor:"pointer", fontFamily:"'DM Mono',monospace", fontSize:10, letterSpacing:1 }}>{label}</button>
+    <button onClick={onClick} style={{ background:"#1e3150", border:"1px solid #2a2d3a", color:"#8ab4d4", padding:"6px 12px", borderRadius:5, cursor:"pointer", fontFamily:"'DM Mono',monospace", fontSize:10, letterSpacing:1 }}>{label}</button>
   );
 }
-const inp = { width:"100%", padding:"7px 9px", background:"#0d0f14", border:"1px solid #222536", borderRadius:5, color:"#ddd8cc", fontFamily:"'DM Mono',monospace", fontSize:11, boxSizing:"border-box" };
+const inp = { width:"100%", padding:"7px 9px", background:"#0f1c2e", border:"1px solid #222536", borderRadius:5, color:"#e8f4fd", fontFamily:"'DM Mono',monospace", fontSize:11, boxSizing:"border-box" };
