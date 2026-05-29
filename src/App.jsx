@@ -1,5 +1,4 @@
 import React, { useState, useMemo, useEffect } from "react";
-import { jsPDF } from "jspdf";
 import * as XLSX from "xlsx";
 
 const SUPABASE_URL = "https://uxgkiuhcqcvcwkvtjqvo.supabase.co";
@@ -65,276 +64,121 @@ function getWeekNumber(dateStr) {
   return `${week}.${d.getFullYear()}`;
 }
 
-// ── PDF Generator ─────────────────────────────────────────────────────────────
-async function generatePDF(weekData, elements, dailyStats, programaAcum, weekLabel) {
-
-  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-
-  const W = 210; const H = 297;
-  const dark = "#0d0f14"; const gold = "#e8b84b"; const green = "#4ade80";
-  const blue = "#60a5fa"; const panel = "#13151e"; const border = "#222536";
-  const light = "#ddd8cc"; const gray = "#555555"; const red = "#f87171";
-
-  const setColor = (hex) => {
-    const r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
-    return [r,g,b];
-  };
-
-  // Background
-  doc.setFillColor(...setColor(dark));
-  doc.rect(0, 0, W, H, 'F');
-
-  // Header bar
-  doc.setFillColor(...setColor(panel));
-  doc.roundedRect(8, 8, W-16, 22, 3, 3, 'F');
-  doc.setDrawColor(...setColor(border));
-  doc.roundedRect(8, 8, W-16, 22, 3, 3, 'S');
-
-  doc.setTextColor(...setColor(gold));
-  doc.setFontSize(14); doc.setFont("helvetica","bold");
-  doc.text("◈ CONTROL DE MONTAJE", 14, 17);
-  doc.setFontSize(7); doc.setFont("helvetica","normal");
-  doc.setTextColor(...setColor(gray));
-  doc.text("BAUMAX SPA · INFORME DE AVANCE SEMANAL", 14, 23);
-
-  doc.setTextColor(...setColor(gray)); doc.setFontSize(7);
-  doc.text("SEMANA", W-60, 14, {align:"right"});
-  doc.setTextColor(...setColor(gold)); doc.setFontSize(11); doc.setFont("helvetica","bold");
-  doc.text(weekLabel, W-12, 19, {align:"right"});
-  doc.setTextColor(...setColor(gray)); doc.setFontSize(7); doc.setFont("helvetica","normal");
-  doc.text(new Date().toLocaleDateString('es-CL'), W-12, 25, {align:"right"});
-
-  // KPI boxes
-  const kpis = [
-    { label: "m² MD", value: fmt2(weekData.areaMD), sub: "bruto", color: green },
-    { label: "m² P", value: fmt2(weekData.areaP), sub: "neto", color: blue },
-    { label: "m² TOTAL", value: fmt2(weekData.areaTotal), sub: "semana", color: gold },
-    { label: "DÍAS EFECTIVOS", value: weekData.diasEfectivos, sub: "con montaje", color: gold },
-    { label: "REND. EFECTIVO", value: fmt2(weekData.rendEfectivo), sub: "m²/día efec.", color: weekData.rendEfectivo >= 600 ? green : red },
-  ];
-  const kpiW = (W-16) / kpis.length;
-  kpis.forEach((k, i) => {
-    const x = 8 + i * kpiW;
-    doc.setFillColor(...setColor(panel));
-    doc.rect(x, 32, kpiW, 18, 'F');
-    doc.setDrawColor(...setColor(border));
-    doc.rect(x, 32, kpiW, 18, 'S');
-    doc.setTextColor(...setColor(gray)); doc.setFontSize(6); doc.setFont("helvetica","normal");
-    doc.text(k.label, x + kpiW/2, 37, {align:"center"});
-    doc.setTextColor(...setColor(k.color)); doc.setFontSize(13); doc.setFont("helvetica","bold");
-    doc.text(String(k.value), x + kpiW/2, 44, {align:"center"});
-    doc.setTextColor(...setColor(gray)); doc.setFontSize(6); doc.setFont("helvetica","normal");
-    doc.text(k.sub, x + kpiW/2, 48, {align:"center"});
-  });
-
-  // Curva S
-  doc.setFillColor(...setColor(panel));
-  doc.roundedRect(8, 52, W-16, 55, 2, 2, 'F');
-  doc.setDrawColor(...setColor(border));
-  doc.roundedRect(8, 52, W-16, 55, 2, 2, 'S');
-  doc.setTextColor(...setColor(gold)); doc.setFontSize(7); doc.setFont("helvetica","bold");
-  doc.text("CURVA S — AVANCE ACUMULADO (m²)", 14, 58);
-
-  // Draw curve S on canvas
-  const canvas = document.createElement('canvas');
-  canvas.width = 600; canvas.height = 200;
-  const ctx = canvas.getContext('2d');
-  ctx.fillStyle = '#13151e'; ctx.fillRect(0,0,600,200);
-
-  const padL=50, padR=20, padT=20, padB=30;
-  const cW = 600-padL-padR; const cH = 200-padT-padB;
-  const maxVal = Math.max(...programaAcum.map(p=>p.acum), 100);
-
-  // Grid
-  ctx.strokeStyle = '#222536'; ctx.lineWidth = 1;
-  for(let i=0;i<=4;i++){
-    const y = padT + (cH/4)*i;
-    ctx.beginPath(); ctx.moveTo(padL,y); ctx.lineTo(padL+cW,y); ctx.stroke();
-    ctx.fillStyle='#555'; ctx.font='10px monospace';
-    ctx.fillText(Math.round(maxVal*(1-i/4)), 2, y+4);
-  }
-
-  // Semanas labels
-  programaAcum.forEach((p,i) => {
-    const x = padL + (i/(programaAcum.length-1||1))*cW;
-    ctx.fillStyle='#555'; ctx.font='10px monospace';
-    ctx.fillText(p.semana.split('.')[0], x-8, 200-8);
-  });
-
-  // Programado line
-  ctx.strokeStyle='#60a5fa'; ctx.lineWidth=2.5;
-  ctx.beginPath();
-  programaAcum.forEach((p,i) => {
-    const x = padL + (i/(programaAcum.length-1||1))*cW;
-    const y = padT + cH*(1-p.acum/maxVal);
-    i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
-  });
-  ctx.stroke();
-
-  // Real line
-  const realPoints = programaAcum.filter(p=>p.real!==null);
-  if(realPoints.length > 0){
-    ctx.strokeStyle='#4ade80'; ctx.lineWidth=2.5;
-    ctx.beginPath();
-    realPoints.forEach((p,i) => {
-      const idx = programaAcum.indexOf(p);
-      const x = padL + (idx/(programaAcum.length-1||1))*cW;
-      const y = padT + cH*(1-p.real/maxVal);
-      i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
-    });
-    ctx.stroke();
-
-    realPoints.forEach(p => {
-      const idx = programaAcum.indexOf(p);
-      const x = padL + (idx/(programaAcum.length-1||1))*cW;
-      const y = padT + cH*(1-p.real/maxVal);
-      ctx.fillStyle='#4ade80'; ctx.beginPath(); ctx.arc(x,y,5,0,Math.PI*2); ctx.fill();
-    });
-  }
-
-  programaAcum.forEach((p,i) => {
-    const x = padL + (i/(programaAcum.length-1||1))*cW;
-    const y = padT + cH*(1-p.acum/maxVal);
-    ctx.fillStyle='#60a5fa'; ctx.beginPath(); ctx.arc(x,y,5,0,Math.PI*2); ctx.fill();
-  });
-
-  // Legend
-  ctx.fillStyle='#60a5fa'; ctx.fillRect(padL,5,20,3);
-  ctx.fillStyle='#60a5fa'; ctx.font='10px monospace'; ctx.fillText('Programado',padL+25,10);
-  ctx.fillStyle='#4ade80'; ctx.fillRect(padL+120,5,20,3);
-  ctx.fillStyle='#4ade80'; ctx.fillText('Real',padL+145,10);
-
-  const imgData = canvas.toDataURL('image/png');
-  doc.addImage(imgData, 'PNG', 10, 60, W-20, 44);
-
-  // Rendimientos
-  let y = 112;
-  doc.setFillColor(...setColor(panel));
-  doc.roundedRect(8, y, W-16, 8, 1, 1, 'F');
-  doc.setTextColor(...setColor(gold)); doc.setFontSize(7); doc.setFont("helvetica","bold");
-  doc.text("RENDIMIENTOS SEMANALES", 14, y+5.5);
-  y += 9;
-
-  const rendHeaders = ["CARGO", "PERSONAS", "m²/PERSONA/DÍA", "m²/PERSONA/SEMANA"];
-  const rendColW = [(W-16)/4, (W-16)/4, (W-16)/4, (W-16)/4];
-  doc.setFillColor(...setColor("#1a1d26"));
-  doc.rect(8, y, W-16, 6, 'F');
-  rendHeaders.forEach((h, i) => {
-    doc.setTextColor(...setColor(gray)); doc.setFontSize(6); doc.setFont("helvetica","bold");
-    doc.text(h, 8 + rendColW.slice(0,i).reduce((a,b)=>a+b,0) + rendColW[i]/2, y+4, {align:"center"});
-  });
-  y += 6;
-
-  const rendRows = [
-    ["Líder de Montaje", weekData.personal.lideres, fmt2(weekData.rendLider), fmt2(weekData.rendLider * weekData.diasEfectivos)],
-    ["Montajista", weekData.personal.montajistas, fmt2(weekData.rendMontajista), fmt2(weekData.rendMontajista * weekData.diasEfectivos)],
-    ["Ayudante", weekData.personal.ayudantes, fmt2(weekData.rendAyudante), fmt2(weekData.rendAyudante * weekData.diasEfectivos)],
-    ["Equipo Completo", weekData.equipoCompleto, fmt2(weekData.rendEquipo), fmt2(weekData.rendEquipo * weekData.diasEfectivos)],
-  ];
-  rendRows.forEach((row, ri) => {
-    doc.setFillColor(...setColor(ri%2===0 ? panel : "#161820"));
-    doc.rect(8, y, W-16, 6, 'F');
-    row.forEach((cell, ci) => {
-      const color = ci===0 ? (ri===3 ? light : gold) : light;
-      doc.setTextColor(...setColor(color)); doc.setFontSize(8); doc.setFont("helvetica", ci===0?"normal":"bold");
-      doc.text(String(cell), 8 + rendColW.slice(0,ci).reduce((a,b)=>a+b,0) + rendColW[ci]/2, y+4.2, {align:"center"});
-    });
-    y += 6;
-  });
-  doc.setDrawColor(...setColor(border));
-  doc.rect(8, 112+9, W-16, y-(112+9), 'S');
-
-  y += 4;
-
-  // Elementos montados
-  doc.setFillColor(...setColor(panel));
-  doc.roundedRect(8, y, W-16, 8, 1, 1, 'F');
-  doc.setTextColor(...setColor(gold)); doc.setFontSize(7); doc.setFont("helvetica","bold");
-  doc.text("ELEMENTOS MONTADOS EN LA SEMANA", 14, y+5.5);
-  y += 9;
-
-  const elemHeaders = ["POSICIÓN", "PLANO", "TIPO", "ÁREA m²", "FECHA"];
-  const elemColW = [35, 30, 20, 35, 30];
-  const elemStartX = [8, 43, 73, 93, 128];
-
-  doc.setFillColor(...setColor("#1a1d26"));
-  doc.rect(8, y, W-16, 6, 'F');
-  elemHeaders.forEach((h, i) => {
-    doc.setTextColor(...setColor(gray)); doc.setFontSize(6); doc.setFont("helvetica","bold");
-    doc.text(h, elemStartX[i] + elemColW[i]/2, y+4, {align:"center"});
-  });
-  y += 6;
+// ── PDF Generator (HTML print approach) ──────────────────────────────────────
+function generatePDF(weekData, elements, dailyStats, programaAcum, weekLabel) {
+  const mdTotal = fmt2(weekData.areaMD);
+  const pTotal = fmt2(weekData.areaP);
+  const total = fmt2(weekData.areaTotal);
+  const fecha = new Date().toLocaleDateString('es-CL');
 
   const weekElements = weekData.positions.map(pos => {
     const el = elements.find(e=>e.pos===pos);
-    const log = dailyStats.find(d => weekData.positions.includes(pos) && d.positions.includes(pos));
-    return el ? { ...el, fecha: log?.date || "" } : null;
+    const d = dailyStats.find(d=>d.positions.includes(pos));
+    return el ? { ...el, fecha: d?.date||"", area: el.tipo==="MD"?el.areaBruta:el.areaNeta } : null;
   }).filter(Boolean);
 
-  weekElements.forEach((el, ri) => {
-    if(y > H - 30) return;
-    doc.setFillColor(...setColor(ri%2===0 ? panel : "#161820"));
-    doc.rect(8, y, W-16, 5.5, 'F');
-    const tipoColor = el.tipo==="MD" ? green : blue;
-    const area = el.tipo==="MD" ? el.areaBruta : el.areaNeta;
-    const cells = [el.pos, el.plano, el.tipo, fmt2(area), el.fecha];
-    cells.forEach((cell, ci) => {
-      const color = ci===2 ? tipoColor : light;
-      doc.setTextColor(...setColor(color)); doc.setFontSize(7.5); doc.setFont("helvetica", ci===2?"bold":"normal");
-      doc.text(String(cell), elemStartX[ci] + elemColW[ci]/2, y+3.8, {align:"center"});
-    });
-    y += 5.5;
-  });
+  const incidencias = dailyStats.filter(d=>getWeekNumber(d.date)===weekLabel);
 
-  // Totals row
-  doc.setFillColor(...setColor("#1a1d26"));
-  doc.rect(8, y, W-16, 6, 'F');
-  doc.setTextColor(...setColor(gray)); doc.setFontSize(7); doc.setFont("helvetica","bold");
-  doc.text("TOTAL", elemStartX[0]+elemColW[0]/2, y+4, {align:"center"});
-  doc.setTextColor(...setColor(gold)); doc.setFontSize(8);
-  doc.text(fmt2(weekData.areaTotal), elemStartX[3]+elemColW[3]/2, y+4, {align:"center"});
-  doc.setTextColor(...setColor(green)); doc.setFontSize(7);
-  doc.text(`MD:${fmt2(weekData.areaMD)}`, elemStartX[4], y+4);
-  doc.setTextColor(...setColor(blue));
-  doc.text(` P:${fmt2(weekData.areaP)}`, elemStartX[4]+15, y+4);
-  y += 6;
-  doc.setDrawColor(...setColor(border));
-  doc.rect(8, y-weekElements.length*5.5-12, W-16, weekElements.length*5.5+12, 'S');
-
-  y += 4;
-
-  // Incidencias
-  if(y < H - 35){
-    doc.setFillColor(...setColor(panel));
-    doc.roundedRect(8, y, W-16, 8, 1, 1, 'F');
-    doc.setTextColor(...setColor(gold)); doc.setFontSize(7); doc.setFont("helvetica","bold");
-    doc.text("INCIDENCIAS Y OBSERVACIONES", 14, y+5.5);
-    y += 9;
-
-    const incRows = dailyStats.filter(d => getWeekNumber(d.date) === weekLabel);
-    incRows.forEach(d => {
-      if(y > H-20) return;
-      doc.setFillColor(...setColor(panel));
-      doc.rect(8, y, W-16, 6, 'F');
-      doc.setDrawColor(...setColor(border));
-      doc.rect(8, y, W-16, 6, 'S');
-      doc.setTextColor(...setColor(gold)); doc.setFontSize(7); doc.setFont("helvetica","normal");
-      doc.text(d.date, 13, y+4);
-      doc.setTextColor(...setColor(light));
-      doc.text(d.note || "Sin incidencias", 50, y+4);
-      y += 6;
-    });
+  const html = `<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family: 'Courier New', monospace; background:#0d0f14; color:#ddd8cc; padding:20px; }
+  .header { background:#13151e; border:1px solid #222536; border-radius:8px; padding:16px 20px; display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; }
+  .title { color:#e8b84b; font-size:18px; font-weight:bold; }
+  .subtitle { color:#555; font-size:10px; letter-spacing:2px; margin-top:4px; }
+  .meta { text-align:right; }
+  .meta-label { color:#555; font-size:9px; letter-spacing:2px; }
+  .meta-value { color:#e8b84b; font-size:13px; font-weight:bold; }
+  .kpis { display:grid; grid-template-columns:repeat(5,1fr); gap:8px; margin-bottom:12px; }
+  .kpi { background:#13151e; border:1px solid #222536; border-radius:6px; padding:10px; text-align:center; }
+  .kpi-label { color:#555; font-size:8px; letter-spacing:1px; margin-bottom:4px; }
+  .kpi-value { font-size:18px; font-weight:bold; }
+  .kpi-sub { color:#555; font-size:8px; margin-top:2px; }
+  .section { background:#13151e; border:1px solid #222536; border-radius:6px; margin-bottom:12px; }
+  .section-title { color:#e8b84b; font-size:9px; letter-spacing:3px; padding:10px 14px; border-bottom:1px solid #222536; }
+  table { width:100%; border-collapse:collapse; }
+  th { background:#1a1d26; color:#555; font-size:8px; letter-spacing:2px; padding:6px 10px; text-align:left; }
+  td { padding:6px 10px; font-size:10px; color:#888; border-bottom:1px solid #181b24; }
+  .gold { color:#e8b84b; }
+  .green { color:#4ade80; }
+  .blue { color:#60a5fa; }
+  .light { color:#ddd8cc; }
+  .footer { text-align:center; color:#555; font-size:8px; margin-top:16px; border-top:1px solid #222536; padding-top:8px; }
+  @media print {
+    body { background:#fff !important; color:#000 !important; }
+    .header,.kpi,.section { background:#f5f5f5 !important; border-color:#ccc !important; }
+    .title,.kpi-value,.gold { color:#b8860b !important; }
+    .green { color:#228b22 !important; }
+    .blue { color:#1e90ff !important; }
+    .subtitle,.meta-label,.kpi-label,.kpi-sub,.section-title { color:#666 !important; }
+    td,th { color:#333 !important; }
   }
+</style>
+</head>
+<body>
+<div class="header">
+  <div>
+    <div class="title">◈ CONTROL DE MONTAJE</div>
+    <div class="subtitle">BAUMAX SPA · INFORME DE AVANCE SEMANAL</div>
+  </div>
+  <div class="meta">
+    <div class="meta-label">SEMANA</div>
+    <div class="meta-value">${weekLabel}</div>
+    <div class="meta-label" style="margin-top:4px">FECHA</div>
+    <div style="color:#ddd8cc;font-size:11px">${fecha}</div>
+  </div>
+</div>
 
-  // Footer
-  doc.setDrawColor(...setColor(border));
-  doc.line(8, H-10, W-8, H-10);
-  doc.setTextColor(...setColor(gray)); doc.setFontSize(6); doc.setFont("helvetica","normal");
-  doc.text(`Informe generado automáticamente · Control de Montaje · Baumax SPA · Semana ${weekLabel}`, W/2, H-5, {align:"center"});
+<div class="kpis">
+  <div class="kpi"><div class="kpi-label">m² MD</div><div class="kpi-value green">${mdTotal}</div><div class="kpi-sub">bruto</div></div>
+  <div class="kpi"><div class="kpi-label">m² P</div><div class="kpi-value blue">${pTotal}</div><div class="kpi-sub">neto</div></div>
+  <div class="kpi"><div class="kpi-label">m² TOTAL</div><div class="kpi-value gold">${total}</div><div class="kpi-sub">semana</div></div>
+  <div class="kpi"><div class="kpi-label">DÍAS EFECTIVOS</div><div class="kpi-value gold">${weekData.diasEfectivos}</div><div class="kpi-sub">con montaje</div></div>
+  <div class="kpi"><div class="kpi-label">REND. EFECTIVO</div><div class="kpi-value ${weekData.rendEfectivo>=600?'green':'red'}" style="${weekData.rendEfectivo<600?'color:#f87171':''}">${fmt2(weekData.rendEfectivo)}</div><div class="kpi-sub">m²/día efec.</div></div>
+</div>
 
-  doc.save(`informe_semana_${weekLabel}.pdf`);
+<div class="section">
+  <div class="section-title">RENDIMIENTOS SEMANALES</div>
+  <table>
+    <tr><th>CARGO</th><th>PERSONAS</th><th>m²/PERSONA/DÍA</th><th>m²/PERSONA/SEMANA</th></tr>
+    <tr><td class="gold">Líder de Montaje</td><td class="light">${weekData.personal.lideres}</td><td class="light">${fmt2(weekData.rendLider)}</td><td class="light">${fmt2(weekData.rendLider*weekData.diasEfectivos)}</td></tr>
+    <tr><td class="gold">Montajista</td><td class="light">${weekData.personal.montajistas}</td><td class="light">${fmt2(weekData.rendMontajista)}</td><td class="light">${fmt2(weekData.rendMontajista*weekData.diasEfectivos)}</td></tr>
+    <tr><td class="gold">Ayudante</td><td class="light">${weekData.personal.ayudantes}</td><td class="light">${fmt2(weekData.rendAyudante)}</td><td class="light">${fmt2(weekData.rendAyudante*weekData.diasEfectivos)}</td></tr>
+    <tr><td class="light">Equipo Completo</td><td class="light">${weekData.equipoCompleto}</td><td class="light">${fmt2(weekData.rendEquipo)}</td><td class="light">${fmt2(weekData.rendEquipo*weekData.diasEfectivos)}</td></tr>
+  </table>
+</div>
+
+<div class="section">
+  <div class="section-title">ELEMENTOS MONTADOS EN LA SEMANA</div>
+  <table>
+    <tr><th>POSICIÓN</th><th>PLANO</th><th>TIPO</th><th>ÁREA m²</th><th>FECHA</th></tr>
+    ${weekElements.map(el=>`<tr><td class="light">${el.pos}</td><td>${el.plano}</td><td class="${el.tipo==="MD"?"green":"blue"}">${el.tipo}</td><td class="light">${fmt2(el.area)}</td><td>${el.fecha}</td></tr>`).join('')}
+    <tr style="background:#1a1d26"><td class="gold" colspan="3"><b>TOTAL</b></td><td class="gold"><b>${total}</b></td><td class="green" style="font-size:9px">MD:${mdTotal} P:${pTotal}</td></tr>
+  </table>
+</div>
+
+<div class="section">
+  <div class="section-title">INCIDENCIAS Y OBSERVACIONES</div>
+  <table>
+    <tr><th>FECHA</th><th>OBSERVACIÓN</th></tr>
+    ${incidencias.map(d=>`<tr><td class="gold">${d.date}</td><td class="light">${d.note||"Sin incidencias"}</td></tr>`).join('')}
+    ${incidencias.length===0?'<tr><td colspan="2" style="color:#555;text-align:center">Sin incidencias registradas</td></tr>':''}
+  </table>
+</div>
+
+<div class="footer">Informe generado automáticamente · Control de Montaje · Baumax SPA · Semana ${weekLabel}</div>
+</body></html>`;
+
+  const win = window.open('', '_blank');
+  win.document.write(html);
+  win.document.close();
+  win.onload = () => win.print();
 }
 
+// ── Excel Generator ───────────────────────────────────────────────────────────
 // ── Excel Generator ───────────────────────────────────────────────────────────
 function generateExcel(weekData, elements, dailyStats, weekLabel) {
   const wb = XLSX.utils.book_new();
