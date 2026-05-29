@@ -1,4 +1,6 @@
 import React, { useState, useMemo, useEffect } from "react";
+import { jsPDF } from "jspdf";
+import * as XLSX from "xlsx";
 
 const SUPABASE_URL = "https://uxgkiuhcqcvcwkvtjqvo.supabase.co";
 const SUPABASE_KEY = "sb_publishable_CSpI4hVvQmUWai7oQcPmuQ_mZe3EYqA";
@@ -65,7 +67,7 @@ function getWeekNumber(dateStr) {
 
 // ── PDF Generator ─────────────────────────────────────────────────────────────
 async function generatePDF(weekData, elements, dailyStats, programaAcum, weekLabel) {
-  const { jsPDF } = await import("https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js");
+
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
 
   const W = 210; const H = 297;
@@ -335,42 +337,48 @@ async function generatePDF(weekData, elements, dailyStats, programaAcum, weekLab
 
 // ── Excel Generator ───────────────────────────────────────────────────────────
 function generateExcel(weekData, elements, dailyStats, weekLabel) {
-  const rows = [
+  const wb = XLSX.utils.book_new();
+
+  // Sheet 1: Resumen
+  const resumen = [
     [`INFORME SEMANAL - SEMANA ${weekLabel}`],
     [],
-    ["RESUMEN"],
-    ["m² MD (bruto)", fmt2(weekData.areaMD)],
-    ["m² P (neto)", fmt2(weekData.areaP)],
-    ["m² Total", fmt2(weekData.areaTotal)],
+    ["RESUMEN SEMANA"],
+    ["m² MD (bruto)", parseFloat(fmt2(weekData.areaMD))],
+    ["m² P (neto)", parseFloat(fmt2(weekData.areaP))],
+    ["m² Total", parseFloat(fmt2(weekData.areaTotal))],
     ["Días efectivos", weekData.diasEfectivos],
-    ["Rendimiento efectivo (m²/día)", fmt2(weekData.rendEfectivo)],
+    ["Rendimiento efectivo (m²/día)", parseFloat(fmt2(weekData.rendEfectivo))],
     [],
     ["RENDIMIENTOS POR CARGO"],
     ["Cargo", "Personas", "m²/persona/día", "m²/persona/semana"],
-    ["Líder de Montaje", weekData.personal.lideres, fmt2(weekData.rendLider), fmt2(weekData.rendLider * weekData.diasEfectivos)],
-    ["Montajista", weekData.personal.montajistas, fmt2(weekData.rendMontajista), fmt2(weekData.rendMontajista * weekData.diasEfectivos)],
-    ["Ayudante", weekData.personal.ayudantes, fmt2(weekData.rendAyudante), fmt2(weekData.rendAyudante * weekData.diasEfectivos)],
-    ["Equipo Completo", weekData.equipoCompleto, fmt2(weekData.rendEquipo), fmt2(weekData.rendEquipo * weekData.diasEfectivos)],
-    [],
-    ["ELEMENTOS MONTADOS"],
-    ["Posición", "Plano", "Tipo", "Área m²", "Fecha"],
-    ...weekData.positions.map(pos => {
-      const el = elements.find(e=>e.pos===pos);
-      const d = dailyStats.find(d=>d.positions.includes(pos));
-      if(!el) return [];
-      return [el.pos, el.plano, el.tipo, el.tipo==="MD"?el.areaBruta:el.areaNeta, d?.date||""];
-    }),
-    [],
-    ["INCIDENCIAS"],
-    ["Fecha", "Observación"],
-    ...dailyStats.filter(d=>getWeekNumber(d.date)===weekLabel).map(d=>[d.date, d.note||"Sin incidencias"]),
+    ["Líder de Montaje", weekData.personal.lideres, parseFloat(fmt2(weekData.rendLider)), parseFloat(fmt2(weekData.rendLider * weekData.diasEfectivos))],
+    ["Montajista", weekData.personal.montajistas, parseFloat(fmt2(weekData.rendMontajista)), parseFloat(fmt2(weekData.rendMontajista * weekData.diasEfectivos))],
+    ["Ayudante", weekData.personal.ayudantes, parseFloat(fmt2(weekData.rendAyudante)), parseFloat(fmt2(weekData.rendAyudante * weekData.diasEfectivos))],
+    ["Equipo Completo", weekData.equipoCompleto, parseFloat(fmt2(weekData.rendEquipo)), parseFloat(fmt2(weekData.rendEquipo * weekData.diasEfectivos))],
   ];
+  const wsResumen = XLSX.utils.aoa_to_sheet(resumen);
+  XLSX.utils.book_append_sheet(wb, wsResumen, "Resumen");
 
-  const csv = rows.map(r => r.join("\t")).join("\n");
-  const blob = new Blob(["\uFEFF"+csv], { type: "text/tab-separated-values;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url; a.download = `informe_semana_${weekLabel}.xls`; a.click();
+  // Sheet 2: Elementos
+  const elemRows = [["Posición","Plano","Tipo","Área m²","Fecha"]];
+  weekData.positions.forEach(pos => {
+    const el = elements.find(e=>e.pos===pos);
+    const d = dailyStats.find(d=>d.positions.includes(pos));
+    if(el) elemRows.push([el.pos, el.plano, el.tipo, el.tipo==="MD"?el.areaBruta:el.areaNeta, d?.date||""]);
+  });
+  const wsElem = XLSX.utils.aoa_to_sheet(elemRows);
+  XLSX.utils.book_append_sheet(wb, wsElem, "Elementos");
+
+  // Sheet 3: Incidencias
+  const incRows = [["Fecha","Observación"]];
+  dailyStats.filter(d=>getWeekNumber(d.date)===weekLabel).forEach(d=>{
+    incRows.push([d.date, d.note||"Sin incidencias"]);
+  });
+  const wsInc = XLSX.utils.aoa_to_sheet(incRows);
+  XLSX.utils.book_append_sheet(wb, wsInc, "Incidencias");
+
+  XLSX.writeFile(wb, `informe_semana_${weekLabel}.xlsx`);
 }
 
 export default function ObraTracker() {
