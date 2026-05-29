@@ -403,10 +403,23 @@ function ObraView({ obra, onBack, setError }) {
   const [registroMode, setRegistroMode] = useState("montar"); // montar | recibir
   const [note, setNote] = useState("");
   const [activeTab, setActiveTab] = useState("registro");
-  const [filters, setFilters] = useState({ search:"", tipo:"TODOS", torre:"TODAS", piso:"TODOS", lote:"TODOS", estado:"TODOS" });
+  const [filterSearch, setFilterSearch] = useState("");
+  const [filterTipo, setFilterTipo] = useState("TODOS");
+  const [filterTorre, setFilterTorre] = useState("TODAS");
+  const [filterPiso, setFilterPiso] = useState("TODOS");
+  const [filterLote, setFilterLote] = useState("TODOS");
+  const [filterEstado, setFilterEstado] = useState("TODOS");
   const [sortCol, setSortCol] = useState("pos");
   const [sortDir, setSortDir] = useState("asc");
-  const setF = (key, val) => setFilters(prev => ({...prev, [key]: val}));
+  const filters = { search:filterSearch, tipo:filterTipo, torre:filterTorre, piso:filterPiso, lote:filterLote, estado:filterEstado };
+  const setF = (key, val) => {
+    if (key==="search") setFilterSearch(val);
+    else if (key==="tipo") setFilterTipo(val);
+    else if (key==="torre") setFilterTorre(val);
+    else if (key==="piso") setFilterPiso(val);
+    else if (key==="lote") setFilterLote(val);
+    else if (key==="estado") setFilterEstado(val);
+  };
   const [selectedWeek, setSelectedWeek] = useState(getWeekNumber(TODAY));
 
   useEffect(() => { loadData(); }, [obra.id]);
@@ -549,16 +562,16 @@ function ObraView({ obra, onBack, setError }) {
   const pisos  = useMemo(()=>["TODOS",...new Set(elements.map(e=>e.piso).filter(Boolean).sort())]  ,[elements]);
 
   // Direct filter computation — no useMemo to avoid stale closure issues
-  function applyFilters(arr) {
-    return arr.filter(e => {
-      const s = filters.search.toLowerCase();
+  const filteredElements = useMemo(() => {
+    return elements.filter(e => {
+      const s = filterSearch.toLowerCase();
       const ms = e.pos.toLowerCase().includes(s) || e.torre.toLowerCase().includes(s) || e.piso.toLowerCase().includes(s);
-      const mt  = filters.tipo   === "TODOS" || e.tipo  === filters.tipo;
-      const mtr = filters.torre  === "TODAS" || e.torre === filters.torre;
-      const mp  = filters.piso   === "TODOS" || e.piso  === filters.piso;
-      const ml  = filters.lote   === "TODOS" || e.lote  === filters.lote;
+      const mt  = filterTipo   === "TODOS" || e.tipo  === filterTipo;
+      const mtr = filterTorre  === "TODAS" || e.torre === filterTorre;
+      const mp  = filterPiso   === "TODOS" || e.piso  === filterPiso;
+      const ml  = filterLote   === "TODOS" || e.lote  === filterLote;
       const est = getEstado(e.pos);
-      const me  = filters.estado === "TODOS" || est === filters.estado.toLowerCase();
+      const me  = filterEstado === "TODOS" || est === filterEstado.toLowerCase();
       return ms && mt && mtr && mp && ml && me;
     }).sort((a,b) => {
       let av = a[sortCol], bv = b[sortCol];
@@ -566,8 +579,7 @@ function ObraView({ obra, onBack, setError }) {
       if (typeof bv === "string") bv = bv.toLowerCase();
       return sortDir === "asc" ? (av < bv ? -1 : av > bv ? 1 : 0) : (av < bv ? 1 : av > bv ? -1 : 0);
     });
-  }
-  const filteredElements = applyFilters(elements);
+  }, [elements, filterSearch, filterTipo, filterTorre, filterPiso, filterLote, filterEstado, sortCol, sortDir, montadosPos, recibidosPos]);
 
   function handleSort(col) {
     if(sortCol===col) setSortDir(d=>d==="asc"?"desc":"asc");
@@ -724,20 +736,20 @@ function ObraView({ obra, onBack, setError }) {
 
               {/* Filtros */}
               <div style={{ display:"flex",gap:6,marginBottom:10,flexWrap:"wrap" }}>
-                <input placeholder="Buscar posición…" value={filters.search} onChange={e=>setF("search", e.target.value)} style={{ ...inp,flex:1,margin:0,minWidth:120 }}/>
-                <select value={filters.lote} onChange={e=>setF("lote", e.target.value)} style={{ ...inp,margin:0,width:"auto" }}>
+                <input placeholder="Buscar posición…" value={filterSearch} onChange={e=>setF("search", e.target.value)} style={{ ...inp,flex:1,margin:0,minWidth:120 }}/>
+                <select value={filterLote} onChange={e=>setF("lote", e.target.value)} style={{ ...inp,margin:0,width:"auto" }}>
                   {lotes.map(t=><option key={t} value={t}>{t==="TODOS"?"Lote: Todos":t}</option>)}
                 </select>
-                <select value={filters.torre} onChange={e=>setF("torre", e.target.value)} style={{ ...inp,margin:0,width:"auto" }}>
+                <select value={filterTorre} onChange={e=>setF("torre", e.target.value)} style={{ ...inp,margin:0,width:"auto" }}>
                   {torres.map(t=><option key={t} value={t}>{t==="TODAS"?"Torre: Todas":t}</option>)}
                 </select>
-                <select value={filters.piso} onChange={e=>setF("piso", e.target.value)} style={{ ...inp,margin:0,width:"auto" }}>
+                <select value={filterPiso} onChange={e=>setF("piso", e.target.value)} style={{ ...inp,margin:0,width:"auto" }}>
                   {pisos.map(t=><option key={t} value={t}>{t==="TODOS"?"Piso: Todos":t}</option>)}
                 </select>
-                <select value={filters.tipo} onChange={e=>setF("tipo", e.target.value)} style={{ ...inp,margin:0,width:"auto" }}>
+                <select value={filterTipo} onChange={e=>setF("tipo", e.target.value)} style={{ ...inp,margin:0,width:"auto" }}>
                   {["TODOS","MD","MDT","P"].map(t=><option key={t} value={t}>{t==="TODOS"?"Tipo: Todos":t}</option>)}
                 </select>
-                <select value={filters.estado} onChange={e=>setF("estado", e.target.value)} style={{ ...inp,margin:0,width:"auto" }}>
+                <select value={filterEstado} onChange={e=>setF("estado", e.target.value)} style={{ ...inp,margin:0,width:"auto" }}>
                   {["TODOS","pendiente","recibido","montado"].map(t=><option key={t} value={t}>{t==="TODOS"?"Estado: Todos":t.charAt(0).toUpperCase()+t.slice(1)}</option>)}
                 </select>
               </div>
@@ -819,14 +831,14 @@ function ObraView({ obra, onBack, setError }) {
             </div>
             {/* Filtros */}
             <div style={{ display:"flex",gap:6,marginBottom:14,flexWrap:"wrap" }}>
-              <input placeholder="Buscar…" value={filters.search} onChange={e=>setF("search", e.target.value)} style={{ ...inp,width:160,margin:0 }}/>
-              <select value={filters.lote} onChange={e=>setF("lote", e.target.value)} style={{ ...inp,margin:0,width:"auto" }}>{lotes.map(t=><option key={t} value={t}>{t==="TODOS"?"Lote: Todos":t}</option>)}</select>
-              <select value={filters.torre} onChange={e=>setF("torre", e.target.value)} style={{ ...inp,margin:0,width:"auto" }}>{torres.map(t=><option key={t} value={t}>{t==="TODAS"?"Torre: Todas":t}</option>)}</select>
-              <select value={filters.piso} onChange={e=>setF("piso", e.target.value)} style={{ ...inp,margin:0,width:"auto" }}>{pisos.map(t=><option key={t} value={t}>{t==="TODOS"?"Piso: Todos":t}</option>)}</select>
-              <select value={filters.tipo} onChange={e=>setF("tipo", e.target.value)} style={{ ...inp,margin:0,width:"auto" }}>
+              <input placeholder="Buscar…" value={filterSearch} onChange={e=>setF("search", e.target.value)} style={{ ...inp,width:160,margin:0 }}/>
+              <select value={filterLote} onChange={e=>setF("lote", e.target.value)} style={{ ...inp,margin:0,width:"auto" }}>{lotes.map(t=><option key={t} value={t}>{t==="TODOS"?"Lote: Todos":t}</option>)}</select>
+              <select value={filterTorre} onChange={e=>setF("torre", e.target.value)} style={{ ...inp,margin:0,width:"auto" }}>{torres.map(t=><option key={t} value={t}>{t==="TODAS"?"Torre: Todas":t}</option>)}</select>
+              <select value={filterPiso} onChange={e=>setF("piso", e.target.value)} style={{ ...inp,margin:0,width:"auto" }}>{pisos.map(t=><option key={t} value={t}>{t==="TODOS"?"Piso: Todos":t}</option>)}</select>
+              <select value={filterTipo} onChange={e=>setF("tipo", e.target.value)} style={{ ...inp,margin:0,width:"auto" }}>
                 {["TODOS","MD","MDT","P"].map(t=><option key={t} value={t}>{t==="TODOS"?"Tipo: Todos":t}</option>)}
               </select>
-              <select value={filters.estado} onChange={e=>setF("estado", e.target.value)} style={{ ...inp,margin:0,width:"auto" }}>
+              <select value={filterEstado} onChange={e=>setF("estado", e.target.value)} style={{ ...inp,margin:0,width:"auto" }}>
                 {["TODOS","pendiente","recibido","montado"].map(t=><option key={t} value={t}>{t==="TODOS"?"Estado: Todos":t.charAt(0).toUpperCase()+t.slice(1)}</option>)}
               </select>
             </div>
