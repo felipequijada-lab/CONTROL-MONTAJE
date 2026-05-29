@@ -277,16 +277,23 @@ function AdminPanel({ obras, onBack, onObraCreated, setError }) {
         const ws = wb.Sheets[sheetName];
         const rows = XLSX.utils.sheet_to_json(ws, { header:1, defval:"" });
         rows.slice(1).forEach(row => {
-          if (!row[4]) return; // posicion required
+          if (!row[4] && !row[3]) return; // need at least pos or tipo
           const tipo = String(row[3]||"").toUpperCase().trim();
+          const pos  = String(row[4]||"").trim();
+          if (!pos) return;
+          // Handle area: may use comma as decimal separator
+          let areaRaw = row[5];
+          let area = 0;
+          if (typeof areaRaw === "number") area = areaRaw;
+          else if (typeof areaRaw === "string") area = parseFloat(areaRaw.replace(",",".")) || 0;
           elementos.push({
             obra_id: obraId,
             lote: String(row[0]||"").trim(),
             torre: String(row[1]||"").trim(),
             piso: String(row[2]||"").trim(),
             tipo,
-            pos: String(row[4]||"").trim(),
-            area: parseFloat(row[5]) || 0,
+            pos,
+            area,
             estado: "pendiente",
           });
         });
@@ -545,24 +552,26 @@ function ObraView({ obra, onBack, setError }) {
   const torres = useMemo(()=>["TODAS",...new Set(elements.map(e=>e.torre).filter(Boolean).sort())],[elements]);
   const pisos  = useMemo(()=>["TODOS",...new Set(elements.map(e=>e.piso).filter(Boolean).sort())]  ,[elements]);
 
-  const filteredElements = useMemo(() => {
-    let arr = elements.filter(e => {
-      const ms = e.pos.toLowerCase().includes(search.toLowerCase())||e.torre.toLowerCase().includes(search.toLowerCase())||e.piso.toLowerCase().includes(search.toLowerCase());
-      const mt = filterTipo==="TODOS"||e.tipo===filterTipo;
-      const mtr = filterTorre==="TODAS"||e.torre===filterTorre;
-      const mp = filterPiso==="TODOS"||e.piso===filterPiso;
-      const ml = filterLote==="TODOS"||e.lote===filterLote;
+  // Direct filter computation — no useMemo to avoid stale closure issues
+  function applyFilters(arr) {
+    return arr.filter(e => {
+      const s = search.toLowerCase();
+      const ms = e.pos.toLowerCase().includes(s) || e.torre.toLowerCase().includes(s) || e.piso.toLowerCase().includes(s);
+      const mt  = filterTipo   === "TODOS" || e.tipo  === filterTipo;
+      const mtr = filterTorre  === "TODAS" || e.torre === filterTorre;
+      const mp  = filterPiso   === "TODOS" || e.piso  === filterPiso;
+      const ml  = filterLote   === "TODOS" || e.lote  === filterLote;
       const est = getEstado(e.pos);
-      const me = filterEstado==="TODOS"||est===filterEstado.toLowerCase();
-      return ms&&mt&&mtr&&mp&&ml&&me;
+      const me  = filterEstado === "TODOS" || est === filterEstado.toLowerCase();
+      return ms && mt && mtr && mp && ml && me;
+    }).sort((a,b) => {
+      let av = a[sortCol], bv = b[sortCol];
+      if (typeof av === "string") av = av.toLowerCase();
+      if (typeof bv === "string") bv = bv.toLowerCase();
+      return sortDir === "asc" ? (av < bv ? -1 : av > bv ? 1 : 0) : (av < bv ? 1 : av > bv ? -1 : 0);
     });
-    return [...arr].sort((a,b)=>{
-      let av=a[sortCol],bv=b[sortCol];
-      if(typeof av==="string") av=av.toLowerCase();
-      if(typeof bv==="string") bv=bv.toLowerCase();
-      return sortDir==="asc"?(av<bv?-1:av>bv?1:0):(av<bv?1:av>bv?-1:0);
-    });
-  }, [elements, search, filterTipo, filterTorre, filterPiso, filterLote, filterEstado, sortCol, sortDir, montadosPos, recibidosPos]);
+  }
+  const filteredElements = applyFilters(elements);
 
   function handleSort(col) {
     if(sortCol===col) setSortDir(d=>d==="asc"?"desc":"asc");
