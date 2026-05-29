@@ -47,6 +47,13 @@ const PERSONAL_CARGOS = [
   { key: "ayudantes", label: "Ayudantes", max: 15, productivo: true },
 ];
 
+const PROGRAMA = [
+  { semana: "22.2026", meta: 600 },
+  { semana: "23.2026", meta: 600 },
+  { semana: "24.2026", meta: 600 },
+  { semana: "25.2026", meta: 600 },
+];
+
 const defaultPersonal = () => ({ coordinadores: 1, calidad: 1, lideres: 1, montajistas: 2, ayudantes: 2 });
 
 function getWeekNumber(dateStr) {
@@ -54,6 +61,316 @@ function getWeekNumber(dateStr) {
   const start = new Date(d.getFullYear(), 0, 1);
   const week = Math.ceil(((d - start) / 86400000 + start.getDay() + 1) / 7);
   return `${week}.${d.getFullYear()}`;
+}
+
+// ── PDF Generator ─────────────────────────────────────────────────────────────
+async function generatePDF(weekData, elements, dailyStats, programaAcum, weekLabel) {
+  const { jsPDF } = await import("https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js");
+  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+
+  const W = 210; const H = 297;
+  const dark = "#0d0f14"; const gold = "#e8b84b"; const green = "#4ade80";
+  const blue = "#60a5fa"; const panel = "#13151e"; const border = "#222536";
+  const light = "#ddd8cc"; const gray = "#555555"; const red = "#f87171";
+
+  const setColor = (hex) => {
+    const r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
+    return [r,g,b];
+  };
+
+  // Background
+  doc.setFillColor(...setColor(dark));
+  doc.rect(0, 0, W, H, 'F');
+
+  // Header bar
+  doc.setFillColor(...setColor(panel));
+  doc.roundedRect(8, 8, W-16, 22, 3, 3, 'F');
+  doc.setDrawColor(...setColor(border));
+  doc.roundedRect(8, 8, W-16, 22, 3, 3, 'S');
+
+  doc.setTextColor(...setColor(gold));
+  doc.setFontSize(14); doc.setFont("helvetica","bold");
+  doc.text("◈ CONTROL DE MONTAJE", 14, 17);
+  doc.setFontSize(7); doc.setFont("helvetica","normal");
+  doc.setTextColor(...setColor(gray));
+  doc.text("BAUMAX SPA · INFORME DE AVANCE SEMANAL", 14, 23);
+
+  doc.setTextColor(...setColor(gray)); doc.setFontSize(7);
+  doc.text("SEMANA", W-60, 14, {align:"right"});
+  doc.setTextColor(...setColor(gold)); doc.setFontSize(11); doc.setFont("helvetica","bold");
+  doc.text(weekLabel, W-12, 19, {align:"right"});
+  doc.setTextColor(...setColor(gray)); doc.setFontSize(7); doc.setFont("helvetica","normal");
+  doc.text(new Date().toLocaleDateString('es-CL'), W-12, 25, {align:"right"});
+
+  // KPI boxes
+  const kpis = [
+    { label: "m² MD", value: fmt2(weekData.areaMD), sub: "bruto", color: green },
+    { label: "m² P", value: fmt2(weekData.areaP), sub: "neto", color: blue },
+    { label: "m² TOTAL", value: fmt2(weekData.areaTotal), sub: "semana", color: gold },
+    { label: "DÍAS EFECTIVOS", value: weekData.diasEfectivos, sub: "con montaje", color: gold },
+    { label: "REND. EFECTIVO", value: fmt2(weekData.rendEfectivo), sub: "m²/día efec.", color: weekData.rendEfectivo >= 600 ? green : red },
+  ];
+  const kpiW = (W-16) / kpis.length;
+  kpis.forEach((k, i) => {
+    const x = 8 + i * kpiW;
+    doc.setFillColor(...setColor(panel));
+    doc.rect(x, 32, kpiW, 18, 'F');
+    doc.setDrawColor(...setColor(border));
+    doc.rect(x, 32, kpiW, 18, 'S');
+    doc.setTextColor(...setColor(gray)); doc.setFontSize(6); doc.setFont("helvetica","normal");
+    doc.text(k.label, x + kpiW/2, 37, {align:"center"});
+    doc.setTextColor(...setColor(k.color)); doc.setFontSize(13); doc.setFont("helvetica","bold");
+    doc.text(String(k.value), x + kpiW/2, 44, {align:"center"});
+    doc.setTextColor(...setColor(gray)); doc.setFontSize(6); doc.setFont("helvetica","normal");
+    doc.text(k.sub, x + kpiW/2, 48, {align:"center"});
+  });
+
+  // Curva S
+  doc.setFillColor(...setColor(panel));
+  doc.roundedRect(8, 52, W-16, 55, 2, 2, 'F');
+  doc.setDrawColor(...setColor(border));
+  doc.roundedRect(8, 52, W-16, 55, 2, 2, 'S');
+  doc.setTextColor(...setColor(gold)); doc.setFontSize(7); doc.setFont("helvetica","bold");
+  doc.text("CURVA S — AVANCE ACUMULADO (m²)", 14, 58);
+
+  // Draw curve S on canvas
+  const canvas = document.createElement('canvas');
+  canvas.width = 600; canvas.height = 200;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#13151e'; ctx.fillRect(0,0,600,200);
+
+  const padL=50, padR=20, padT=20, padB=30;
+  const cW = 600-padL-padR; const cH = 200-padT-padB;
+  const maxVal = Math.max(...programaAcum.map(p=>p.acum), 100);
+
+  // Grid
+  ctx.strokeStyle = '#222536'; ctx.lineWidth = 1;
+  for(let i=0;i<=4;i++){
+    const y = padT + (cH/4)*i;
+    ctx.beginPath(); ctx.moveTo(padL,y); ctx.lineTo(padL+cW,y); ctx.stroke();
+    ctx.fillStyle='#555'; ctx.font='10px monospace';
+    ctx.fillText(Math.round(maxVal*(1-i/4)), 2, y+4);
+  }
+
+  // Semanas labels
+  programaAcum.forEach((p,i) => {
+    const x = padL + (i/(programaAcum.length-1||1))*cW;
+    ctx.fillStyle='#555'; ctx.font='10px monospace';
+    ctx.fillText(p.semana.split('.')[0], x-8, 200-8);
+  });
+
+  // Programado line
+  ctx.strokeStyle='#60a5fa'; ctx.lineWidth=2.5;
+  ctx.beginPath();
+  programaAcum.forEach((p,i) => {
+    const x = padL + (i/(programaAcum.length-1||1))*cW;
+    const y = padT + cH*(1-p.acum/maxVal);
+    i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+  });
+  ctx.stroke();
+
+  // Real line
+  const realPoints = programaAcum.filter(p=>p.real!==null);
+  if(realPoints.length > 0){
+    ctx.strokeStyle='#4ade80'; ctx.lineWidth=2.5;
+    ctx.beginPath();
+    realPoints.forEach((p,i) => {
+      const idx = programaAcum.indexOf(p);
+      const x = padL + (idx/(programaAcum.length-1||1))*cW;
+      const y = padT + cH*(1-p.real/maxVal);
+      i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+    });
+    ctx.stroke();
+
+    realPoints.forEach(p => {
+      const idx = programaAcum.indexOf(p);
+      const x = padL + (idx/(programaAcum.length-1||1))*cW;
+      const y = padT + cH*(1-p.real/maxVal);
+      ctx.fillStyle='#4ade80'; ctx.beginPath(); ctx.arc(x,y,5,0,Math.PI*2); ctx.fill();
+    });
+  }
+
+  programaAcum.forEach((p,i) => {
+    const x = padL + (i/(programaAcum.length-1||1))*cW;
+    const y = padT + cH*(1-p.acum/maxVal);
+    ctx.fillStyle='#60a5fa'; ctx.beginPath(); ctx.arc(x,y,5,0,Math.PI*2); ctx.fill();
+  });
+
+  // Legend
+  ctx.fillStyle='#60a5fa'; ctx.fillRect(padL,5,20,3);
+  ctx.fillStyle='#60a5fa'; ctx.font='10px monospace'; ctx.fillText('Programado',padL+25,10);
+  ctx.fillStyle='#4ade80'; ctx.fillRect(padL+120,5,20,3);
+  ctx.fillStyle='#4ade80'; ctx.fillText('Real',padL+145,10);
+
+  const imgData = canvas.toDataURL('image/png');
+  doc.addImage(imgData, 'PNG', 10, 60, W-20, 44);
+
+  // Rendimientos
+  let y = 112;
+  doc.setFillColor(...setColor(panel));
+  doc.roundedRect(8, y, W-16, 8, 1, 1, 'F');
+  doc.setTextColor(...setColor(gold)); doc.setFontSize(7); doc.setFont("helvetica","bold");
+  doc.text("RENDIMIENTOS SEMANALES", 14, y+5.5);
+  y += 9;
+
+  const rendHeaders = ["CARGO", "PERSONAS", "m²/PERSONA/DÍA", "m²/PERSONA/SEMANA"];
+  const rendColW = [(W-16)/4, (W-16)/4, (W-16)/4, (W-16)/4];
+  doc.setFillColor(...setColor("#1a1d26"));
+  doc.rect(8, y, W-16, 6, 'F');
+  rendHeaders.forEach((h, i) => {
+    doc.setTextColor(...setColor(gray)); doc.setFontSize(6); doc.setFont("helvetica","bold");
+    doc.text(h, 8 + rendColW.slice(0,i).reduce((a,b)=>a+b,0) + rendColW[i]/2, y+4, {align:"center"});
+  });
+  y += 6;
+
+  const rendRows = [
+    ["Líder de Montaje", weekData.personal.lideres, fmt2(weekData.rendLider), fmt2(weekData.rendLider * weekData.diasEfectivos)],
+    ["Montajista", weekData.personal.montajistas, fmt2(weekData.rendMontajista), fmt2(weekData.rendMontajista * weekData.diasEfectivos)],
+    ["Ayudante", weekData.personal.ayudantes, fmt2(weekData.rendAyudante), fmt2(weekData.rendAyudante * weekData.diasEfectivos)],
+    ["Equipo Completo", weekData.equipoCompleto, fmt2(weekData.rendEquipo), fmt2(weekData.rendEquipo * weekData.diasEfectivos)],
+  ];
+  rendRows.forEach((row, ri) => {
+    doc.setFillColor(...setColor(ri%2===0 ? panel : "#161820"));
+    doc.rect(8, y, W-16, 6, 'F');
+    row.forEach((cell, ci) => {
+      const color = ci===0 ? (ri===3 ? light : gold) : light;
+      doc.setTextColor(...setColor(color)); doc.setFontSize(8); doc.setFont("helvetica", ci===0?"normal":"bold");
+      doc.text(String(cell), 8 + rendColW.slice(0,ci).reduce((a,b)=>a+b,0) + rendColW[ci]/2, y+4.2, {align:"center"});
+    });
+    y += 6;
+  });
+  doc.setDrawColor(...setColor(border));
+  doc.rect(8, 112+9, W-16, y-(112+9), 'S');
+
+  y += 4;
+
+  // Elementos montados
+  doc.setFillColor(...setColor(panel));
+  doc.roundedRect(8, y, W-16, 8, 1, 1, 'F');
+  doc.setTextColor(...setColor(gold)); doc.setFontSize(7); doc.setFont("helvetica","bold");
+  doc.text("ELEMENTOS MONTADOS EN LA SEMANA", 14, y+5.5);
+  y += 9;
+
+  const elemHeaders = ["POSICIÓN", "PLANO", "TIPO", "ÁREA m²", "FECHA"];
+  const elemColW = [35, 30, 20, 35, 30];
+  const elemStartX = [8, 43, 73, 93, 128];
+
+  doc.setFillColor(...setColor("#1a1d26"));
+  doc.rect(8, y, W-16, 6, 'F');
+  elemHeaders.forEach((h, i) => {
+    doc.setTextColor(...setColor(gray)); doc.setFontSize(6); doc.setFont("helvetica","bold");
+    doc.text(h, elemStartX[i] + elemColW[i]/2, y+4, {align:"center"});
+  });
+  y += 6;
+
+  const weekElements = weekData.positions.map(pos => {
+    const el = elements.find(e=>e.pos===pos);
+    const log = dailyStats.find(d => weekData.positions.includes(pos) && d.positions.includes(pos));
+    return el ? { ...el, fecha: log?.date || "" } : null;
+  }).filter(Boolean);
+
+  weekElements.forEach((el, ri) => {
+    if(y > H - 30) return;
+    doc.setFillColor(...setColor(ri%2===0 ? panel : "#161820"));
+    doc.rect(8, y, W-16, 5.5, 'F');
+    const tipoColor = el.tipo==="MD" ? green : blue;
+    const area = el.tipo==="MD" ? el.areaBruta : el.areaNeta;
+    const cells = [el.pos, el.plano, el.tipo, fmt2(area), el.fecha];
+    cells.forEach((cell, ci) => {
+      const color = ci===2 ? tipoColor : light;
+      doc.setTextColor(...setColor(color)); doc.setFontSize(7.5); doc.setFont("helvetica", ci===2?"bold":"normal");
+      doc.text(String(cell), elemStartX[ci] + elemColW[ci]/2, y+3.8, {align:"center"});
+    });
+    y += 5.5;
+  });
+
+  // Totals row
+  doc.setFillColor(...setColor("#1a1d26"));
+  doc.rect(8, y, W-16, 6, 'F');
+  doc.setTextColor(...setColor(gray)); doc.setFontSize(7); doc.setFont("helvetica","bold");
+  doc.text("TOTAL", elemStartX[0]+elemColW[0]/2, y+4, {align:"center"});
+  doc.setTextColor(...setColor(gold)); doc.setFontSize(8);
+  doc.text(fmt2(weekData.areaTotal), elemStartX[3]+elemColW[3]/2, y+4, {align:"center"});
+  doc.setTextColor(...setColor(green)); doc.setFontSize(7);
+  doc.text(`MD:${fmt2(weekData.areaMD)}`, elemStartX[4], y+4);
+  doc.setTextColor(...setColor(blue));
+  doc.text(` P:${fmt2(weekData.areaP)}`, elemStartX[4]+15, y+4);
+  y += 6;
+  doc.setDrawColor(...setColor(border));
+  doc.rect(8, y-weekElements.length*5.5-12, W-16, weekElements.length*5.5+12, 'S');
+
+  y += 4;
+
+  // Incidencias
+  if(y < H - 35){
+    doc.setFillColor(...setColor(panel));
+    doc.roundedRect(8, y, W-16, 8, 1, 1, 'F');
+    doc.setTextColor(...setColor(gold)); doc.setFontSize(7); doc.setFont("helvetica","bold");
+    doc.text("INCIDENCIAS Y OBSERVACIONES", 14, y+5.5);
+    y += 9;
+
+    const incRows = dailyStats.filter(d => getWeekNumber(d.date) === weekLabel);
+    incRows.forEach(d => {
+      if(y > H-20) return;
+      doc.setFillColor(...setColor(panel));
+      doc.rect(8, y, W-16, 6, 'F');
+      doc.setDrawColor(...setColor(border));
+      doc.rect(8, y, W-16, 6, 'S');
+      doc.setTextColor(...setColor(gold)); doc.setFontSize(7); doc.setFont("helvetica","normal");
+      doc.text(d.date, 13, y+4);
+      doc.setTextColor(...setColor(light));
+      doc.text(d.note || "Sin incidencias", 50, y+4);
+      y += 6;
+    });
+  }
+
+  // Footer
+  doc.setDrawColor(...setColor(border));
+  doc.line(8, H-10, W-8, H-10);
+  doc.setTextColor(...setColor(gray)); doc.setFontSize(6); doc.setFont("helvetica","normal");
+  doc.text(`Informe generado automáticamente · Control de Montaje · Baumax SPA · Semana ${weekLabel}`, W/2, H-5, {align:"center"});
+
+  doc.save(`informe_semana_${weekLabel}.pdf`);
+}
+
+// ── Excel Generator ───────────────────────────────────────────────────────────
+function generateExcel(weekData, elements, dailyStats, weekLabel) {
+  const rows = [
+    [`INFORME SEMANAL - SEMANA ${weekLabel}`],
+    [],
+    ["RESUMEN"],
+    ["m² MD (bruto)", fmt2(weekData.areaMD)],
+    ["m² P (neto)", fmt2(weekData.areaP)],
+    ["m² Total", fmt2(weekData.areaTotal)],
+    ["Días efectivos", weekData.diasEfectivos],
+    ["Rendimiento efectivo (m²/día)", fmt2(weekData.rendEfectivo)],
+    [],
+    ["RENDIMIENTOS POR CARGO"],
+    ["Cargo", "Personas", "m²/persona/día", "m²/persona/semana"],
+    ["Líder de Montaje", weekData.personal.lideres, fmt2(weekData.rendLider), fmt2(weekData.rendLider * weekData.diasEfectivos)],
+    ["Montajista", weekData.personal.montajistas, fmt2(weekData.rendMontajista), fmt2(weekData.rendMontajista * weekData.diasEfectivos)],
+    ["Ayudante", weekData.personal.ayudantes, fmt2(weekData.rendAyudante), fmt2(weekData.rendAyudante * weekData.diasEfectivos)],
+    ["Equipo Completo", weekData.equipoCompleto, fmt2(weekData.rendEquipo), fmt2(weekData.rendEquipo * weekData.diasEfectivos)],
+    [],
+    ["ELEMENTOS MONTADOS"],
+    ["Posición", "Plano", "Tipo", "Área m²", "Fecha"],
+    ...weekData.positions.map(pos => {
+      const el = elements.find(e=>e.pos===pos);
+      const d = dailyStats.find(d=>d.positions.includes(pos));
+      if(!el) return [];
+      return [el.pos, el.plano, el.tipo, el.tipo==="MD"?el.areaBruta:el.areaNeta, d?.date||""];
+    }),
+    [],
+    ["INCIDENCIAS"],
+    ["Fecha", "Observación"],
+    ...dailyStats.filter(d=>getWeekNumber(d.date)===weekLabel).map(d=>[d.date, d.note||"Sin incidencias"]),
+  ];
+
+  const csv = rows.map(r => r.join("\t")).join("\n");
+  const blob = new Blob(["\uFEFF"+csv], { type: "text/tab-separated-values;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = `informe_semana_${weekLabel}.xls`; a.click();
 }
 
 export default function ObraTracker() {
@@ -70,6 +387,7 @@ export default function ObraTracker() {
   const [filterTipo, setFilterTipo] = useState("TODOS");
   const [obraId] = useState("001");
   const [error, setError] = useState(null);
+  const [selectedWeek, setSelectedWeek] = useState(getWeekNumber(TODAY));
 
   useEffect(() => { loadLogs(); }, []);
 
@@ -82,15 +400,8 @@ export default function ObraTracker() {
         const positions = row.elementos_montados ? row.elementos_montados.split(",") : [];
         positions.forEach(pos => {
           if (pos.trim()) expanded.push({
-            date: row.fecha,
-            pos: pos.trim(),
-            personal: {
-              coordinadores: row.coordinadores || 0,
-              calidad: row.calidad || 0,
-              lideres: row.lideres || 0,
-              montajistas: row.montajistas || 0,
-              ayudantes: row.ayudantes || 0,
-            },
+            date: row.fecha, pos: pos.trim(),
+            personal: { coordinadores: row.coordinadores||0, calidad: row.calidad||0, lideres: row.lideres||0, montajistas: row.montajistas||0, ayudantes: row.ayudantes||0 },
             note: row.incidencias || ""
           });
         });
@@ -111,8 +422,8 @@ export default function ObraTracker() {
       md:  { total: md.length, mounted: mdM.length, areaTotal: md.reduce((s,e)=>s+e.areaBruta,0), areaMounted: mdM.reduce((s,e)=>s+e.areaBruta,0) },
       p:   { total: p.length,  mounted: pM.length,  areaTotal: p.reduce((s,e)=>s+e.areaNeta,0),   areaMounted: pM.reduce((s,e)=>s+e.areaNeta,0) },
       all: { total: elements.length, mounted: mountedPos.size,
-             areaTotal:   md.reduce((s,e)=>s+e.areaBruta,0) + p.reduce((s,e)=>s+e.areaNeta,0),
-             areaMounted: mdM.reduce((s,e)=>s+e.areaBruta,0) + pM.reduce((s,e)=>s+e.areaNeta,0) },
+             areaTotal: md.reduce((s,e)=>s+e.areaBruta,0)+p.reduce((s,e)=>s+e.areaNeta,0),
+             areaMounted: mdM.reduce((s,e)=>s+e.areaBruta,0)+pM.reduce((s,e)=>s+e.areaNeta,0) },
     };
   }, [elements, mountedPos]);
 
@@ -123,13 +434,12 @@ export default function ObraTracker() {
   const dailyStats = useMemo(() => {
     const map = {};
     logs.forEach(l => {
-      if (!map[l.date]) map[l.date] = { date: l.date, positions: [], personal: l.personal };
+      if (!map[l.date]) map[l.date] = { date: l.date, positions: [], personal: l.personal, note: l.note };
       map[l.date].positions.push(l.pos);
     });
     return Object.values(map).map(d => {
       const elems = elements.filter(e => d.positions.includes(e.pos));
-      const mdEl = elems.filter(e=>e.tipo==="MD");
-      const pEl  = elems.filter(e=>e.tipo==="P");
+      const mdEl = elems.filter(e=>e.tipo==="MD"); const pEl = elems.filter(e=>e.tipo==="P");
       const areaMD = mdEl.reduce((s,e)=>s+e.areaBruta,0);
       const areaP  = pEl.reduce((s,e)=>s+e.areaNeta,0);
       const areaTotal = areaMD + areaP;
@@ -137,34 +447,64 @@ export default function ObraTracker() {
       const equipoCompleto = (p.coordinadores||0)+(p.calidad||0)+(p.lideres||0)+(p.montajistas||0)+(p.ayudantes||0);
       return {
         ...d, countMD: mdEl.length, areaMD, countP: pEl.length, areaP, areaTotal,
-        rendLider:      p.lideres      > 0 ? areaTotal / p.lideres      : 0,
-        rendMontajista: p.montajistas  > 0 ? areaTotal / p.montajistas  : 0,
-        rendAyudante:   p.ayudantes    > 0 ? areaTotal / p.ayudantes    : 0,
-        rendEquipo:     equipoCompleto > 0 ? areaTotal / equipoCompleto : 0,
+        rendLider:      p.lideres      > 0 ? areaTotal/p.lideres      : 0,
+        rendMontajista: p.montajistas  > 0 ? areaTotal/p.montajistas  : 0,
+        rendAyudante:   p.ayudantes    > 0 ? areaTotal/p.ayudantes    : 0,
+        rendEquipo:     equipoCompleto > 0 ? areaTotal/equipoCompleto : 0,
         equipoCompleto,
       };
     }).sort((a,b) => b.date.localeCompare(a.date));
   }, [logs, elements]);
 
-  // Weekly stats
   const weeklyStats = useMemo(() => {
     const map = {};
     dailyStats.forEach(d => {
       const week = getWeekNumber(d.date);
-      if (!map[week]) map[week] = { week, areaTotal: 0, days: 0, rendEquipo: [] };
-      map[week].areaTotal += d.areaTotal;
-      map[week].days += 1;
-      if (d.rendEquipo > 0) map[week].rendEquipo.push(d.rendEquipo);
+      if (!map[week]) map[week] = { week, days: [], positions: [] };
+      map[week].days.push(d);
+      map[week].positions.push(...d.positions);
     });
-    return Object.values(map).map(w => ({
-      ...w,
-      rendEquipoAvg: w.rendEquipo.length > 0 ? w.rendEquipo.reduce((s,v)=>s+v,0)/w.rendEquipo.length : 0,
-    })).sort((a,b) => b.week.localeCompare(a.week));
+    return Object.values(map).map(w => {
+      const diasEfectivos = w.days.filter(d=>d.areaTotal>0).length;
+      const areaTotal = w.days.reduce((s,d)=>s+d.areaTotal,0);
+      const areaMD = w.days.reduce((s,d)=>s+d.areaMD,0);
+      const areaP  = w.days.reduce((s,d)=>s+d.areaP,0);
+      const avgPersonal = {
+        coordinadores: Math.round(w.days.reduce((s,d)=>s+d.personal.coordinadores,0)/w.days.length),
+        calidad: Math.round(w.days.reduce((s,d)=>s+d.personal.calidad,0)/w.days.length),
+        lideres: Math.round(w.days.reduce((s,d)=>s+d.personal.lideres,0)/w.days.length),
+        montajistas: Math.round(w.days.reduce((s,d)=>s+d.personal.montajistas,0)/w.days.length),
+        ayudantes: Math.round(w.days.reduce((s,d)=>s+d.personal.ayudantes,0)/w.days.length),
+      };
+      const equipoCompleto = Object.values(avgPersonal).reduce((a,b)=>a+b,0);
+      const rendEfectivo = diasEfectivos > 0 ? areaTotal/diasEfectivos : 0;
+      return {
+        week: w.week, diasEfectivos, areaTotal, areaMD, areaP,
+        positions: w.positions,
+        personal: avgPersonal, equipoCompleto,
+        rendLider:      avgPersonal.lideres      > 0 ? areaTotal/avgPersonal.lideres      : 0,
+        rendMontajista: avgPersonal.montajistas  > 0 ? areaTotal/avgPersonal.montajistas  : 0,
+        rendAyudante:   avgPersonal.ayudantes    > 0 ? areaTotal/avgPersonal.ayudantes    : 0,
+        rendEquipo:     equipoCompleto           > 0 ? areaTotal/equipoCompleto           : 0,
+        rendEfectivo,
+      };
+    }).sort((a,b) => b.week.localeCompare(a.week));
   }, [dailyStats]);
+
+  // Programa acumulado para curva S
+  const programaAcum = useMemo(() => {
+    let acum = 0;
+    return PROGRAMA.map(p => {
+      acum += p.meta;
+      const weekReal = weeklyStats.find(w=>w.week===p.semana);
+      const realAcum = weeklyStats.filter(w=>w.week<=p.semana).reduce((s,w)=>s+w.areaTotal,0);
+      return { semana: p.semana, acum, real: weekReal ? realAcum : null };
+    });
+  }, [weeklyStats]);
 
   const filteredElements = useMemo(() => elements.filter(e => {
     const ms = e.pos.toLowerCase().includes(search.toLowerCase()) || e.plano.toLowerCase().includes(search.toLowerCase());
-    const mt = filterTipo === "TODOS" || e.tipo === filterTipo;
+    const mt = filterTipo==="TODOS" || e.tipo===filterTipo;
     return ms && mt;
   }), [elements, search, filterTipo]);
 
@@ -179,29 +519,21 @@ export default function ObraTracker() {
     if (toAdd.length === 0) return;
     setSaving(true);
     try {
-      const mdEls = elements.filter(e => toAdd.includes(e.pos) && e.tipo === "MD");
-      const pEls  = elements.filter(e => toAdd.includes(e.pos) && e.tipo === "P");
+      const mdEls = elements.filter(e => toAdd.includes(e.pos) && e.tipo==="MD");
+      const pEls  = elements.filter(e => toAdd.includes(e.pos) && e.tipo==="P");
       await sbFetch("registros", {
         method: "POST",
         body: JSON.stringify({
-          fecha: selectedDate,
-          obra_id: obraId,
-          coordinadores: personal.coordinadores,
-          calidad: personal.calidad,
-          lideres: personal.lideres,
-          montajistas: personal.montajistas,
-          ayudantes: personal.ayudantes,
-          m2_md: mdEls.reduce((s,e)=>s+e.areaBruta,0),
-          m2_p: pEls.reduce((s,e)=>s+e.areaNeta,0),
-          elementos_montados: toAdd.join(","),
-          incidencias: note,
-          registrado_por: "encargado",
+          fecha: selectedDate, obra_id: obraId,
+          coordinadores: personal.coordinadores, calidad: personal.calidad,
+          lideres: personal.lideres, montajistas: personal.montajistas, ayudantes: personal.ayudantes,
+          m2_md: mdEls.reduce((s,e)=>s+e.areaBruta,0), m2_p: pEls.reduce((s,e)=>s+e.areaNeta,0),
+          elementos_montados: toAdd.join(","), incidencias: note, registrado_por: "encargado",
         }),
       });
       const newLogs = toAdd.map(pos => ({ date: selectedDate, pos, personal: { ...personal }, note }));
       setLogs(prev => [...prev, ...newLogs]);
-      setSelectedPos([]);
-      setNote("");
+      setSelectedPos([]); setNote("");
     } catch (e) { setError("Error guardando: " + e.message); }
     setSaving(false);
   }
@@ -216,12 +548,11 @@ export default function ObraTracker() {
   }
 
   function exportCSV() {
-    const rows = [["Fecha","Semana","Posición","Plano","Tipo","Área m²","Coordinadores","Calidad","Líderes","Montajistas","Ayudantes","Rend.Líder","Rend.Montajista","Rend.Ayudante","Rend.Equipo","Incidencias"]];
+    const rows = [["Fecha","Semana","Posición","Plano","Tipo","Área m²","Coord.","Calidad","Líderes","Montajistas","Ayudantes","Rend.Líder","Rend.Montajista","Rend.Ayudante","Rend.Equipo","Incidencias"]];
     dailyStats.forEach(d => {
       d.positions.forEach(pos => {
-        const e = elements.find(el=>el.pos===pos);
-        if (!e) return;
-        const area = e.tipo==="MD" ? e.areaBruta : e.areaNeta;
+        const e = elements.find(el=>el.pos===pos); if(!e) return;
+        const area = e.tipo==="MD"?e.areaBruta:e.areaNeta;
         rows.push([d.date, getWeekNumber(d.date), pos, e.plano, e.tipo, fmt2(area),
           d.personal.coordinadores, d.personal.calidad, d.personal.lideres, d.personal.montajistas, d.personal.ayudantes,
           fmt2(d.rendLider), fmt2(d.rendMontajista), fmt2(d.rendAyudante), fmt2(d.rendEquipo), d.note||""]);
@@ -230,20 +561,7 @@ export default function ObraTracker() {
     const csv = rows.map(r => r.join(",")).join("\n");
     const blob = new Blob(["\uFEFF"+csv], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob); const a = document.createElement("a");
-    a.href = url; a.download = "avance_obra.csv"; a.click();
-  }
-
-  function exportWeekly() {
-    const rows = [["Semana","m² MD","m² P","m² Total","Rend.Equipo m²/p"]];
-    weeklyStats.forEach(w => {
-      const mdArea = dailyStats.filter(d=>getWeekNumber(d.date)===w.week).reduce((s,d)=>s+d.areaMD,0);
-      const pArea  = dailyStats.filter(d=>getWeekNumber(d.date)===w.week).reduce((s,d)=>s+d.areaP,0);
-      rows.push([w.week, fmt2(mdArea), fmt2(pArea), fmt2(w.areaTotal), fmt2(w.rendEquipoAvg)]);
-    });
-    const csv = rows.map(r => r.join(",")).join("\n");
-    const blob = new Blob(["\uFEFF"+csv], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob); const a = document.createElement("a");
-    a.href = url; a.download = "avance_semanal.csv"; a.click();
+    a.href = url; a.download = "avance_completo.csv"; a.click();
   }
 
   if (loading) return (
@@ -252,10 +570,11 @@ export default function ObraTracker() {
     </div>
   );
 
+  const currentWeekData = weeklyStats.find(w=>w.week===selectedWeek);
+
   return (
     <div style={{ minHeight:"100vh", background:"#0d0f14", color:"#ddd8cc", fontFamily:"'DM Mono','Courier New',monospace" }}>
       <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Archivo+Black&display=swap" rel="stylesheet"/>
-
       {error && (
         <div style={{ background:"#3a1a1a", color:"#f87171", padding:"10px 28px", fontSize:11, borderBottom:"1px solid #5a2a2a" }}>
           ⚠ {error} <button onClick={()=>setError(null)} style={{ marginLeft:12, background:"none", border:"none", color:"#f87171", cursor:"pointer" }}>×</button>
@@ -277,7 +596,6 @@ export default function ObraTracker() {
         </div>
       </div>
 
-      {/* PROGRESS BARS */}
       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", height:5 }}>
         <div style={{ background:"#1a1d26" }}><div style={{ height:5, width:pctMD+"%", background:"linear-gradient(90deg,#16a34a,#4ade80)", transition:"width 0.6s" }}/></div>
         <div style={{ background:"#1a1d26" }}><div style={{ height:5, width:pctP+"%", background:"linear-gradient(90deg,#1d4ed8,#60a5fa)", transition:"width 0.6s" }}/></div>
@@ -294,8 +612,7 @@ export default function ObraTracker() {
           }}>{l}</button>
         ))}
         <div style={{ marginLeft:"auto", display:"flex", gap:8, alignItems:"center" }}>
-          <ExportBtn onClick={exportWeekly} label="↓ SEMANAL"/>
-          <ExportBtn onClick={exportCSV} label="↓ COMPLETO"/>
+          <ExportBtn onClick={exportCSV} label="↓ COMPLETO CSV"/>
         </div>
       </div>
 
@@ -309,7 +626,6 @@ export default function ObraTracker() {
                 <Label>Fecha</Label>
                 <input type="date" value={selectedDate} onChange={e=>setSelectedDate(e.target.value)} style={inp}/>
                 <div style={{ fontSize:9, color:"#555", letterSpacing:2, marginTop:4 }}>SEMANA {getWeekNumber(selectedDate)}</div>
-
                 <Label>PERSONAL EN OBRA</Label>
                 <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:6, marginTop:4 }}>
                   {PERSONAL_CARGOS.map(cargo => (
@@ -317,47 +633,40 @@ export default function ObraTracker() {
                       <div style={{ fontSize:9, color: cargo.productivo ? "#e8b84b" : "#555", letterSpacing:1, marginBottom:2 }}>
                         {cargo.label.toUpperCase()} {cargo.productivo ? "★" : ""}
                       </div>
-                      <input type="number" min={0} max={cargo.max}
-                        value={personal[cargo.key]}
+                      <input type="number" min={0} max={cargo.max} value={personal[cargo.key]}
                         onChange={e => setPersonal(prev => ({ ...prev, [cargo.key]: Number(e.target.value) }))}
                         style={{ ...inp, margin:0 }}/>
                     </div>
                   ))}
                 </div>
                 <div style={{ fontSize:9, color:"#555", marginTop:4 }}>★ Cargos productivos</div>
-
                 <Label>Incidencias / Nota</Label>
                 <textarea value={note} onChange={e=>setNote(e.target.value)} rows={2}
                   placeholder="Observaciones del día, incidentes…"
                   style={{ ...inp, resize:"vertical", fontFamily:"'DM Mono',monospace", fontSize:11 }}/>
-
                 {selectedPos.length > 0 && (
                   <div style={{ background:"#1a1d26", borderRadius:6, padding:10, marginTop:8, fontSize:11 }}>
                     <div style={{ color:"#555", fontSize:9, letterSpacing:2, marginBottom:6 }}>SELECCIÓN ACTUAL</div>
                     {selSummary.md > 0 && <div style={{ color:"#4ade80" }}>MD: {selSummary.md} elem · {fmt2(selSummary.areaMD)} m² bruto</div>}
                     {selSummary.p  > 0 && <div style={{ color:"#60a5fa", marginTop:3 }}>P: {selSummary.p} elem · {fmt2(selSummary.areaP)} m² neto</div>}
-                    <div style={{ color:"#e8b84b", marginTop:3, borderTop:"1px solid #2a2d3a", paddingTop:6 }}>
-                      Total: {fmt2(selSummary.areaMD + selSummary.areaP)} m²
-                    </div>
+                    <div style={{ color:"#e8b84b", marginTop:3, borderTop:"1px solid #2a2d3a", paddingTop:6 }}>Total: {fmt2(selSummary.areaMD+selSummary.areaP)} m²</div>
                   </div>
                 )}
-
                 <button onClick={registrar} disabled={selectedPos.length===0||saving} style={{
                   width:"100%", padding:"11px", marginTop:10,
-                  background: selectedPos.length>0 && !saving ? "#e8b84b" : "#1e2130",
-                  color: selectedPos.length>0 && !saving ? "#0d0f14" : "#444",
-                  border:"none", borderRadius:6, cursor: selectedPos.length>0 && !saving ? "pointer" : "default",
+                  background: selectedPos.length>0&&!saving ? "#e8b84b" : "#1e2130",
+                  color: selectedPos.length>0&&!saving ? "#0d0f14" : "#444",
+                  border:"none", borderRadius:6, cursor: selectedPos.length>0&&!saving?"pointer":"default",
                   fontFamily:"'Archivo Black',sans-serif", fontSize:13, letterSpacing:1, transition:"all 0.2s"
                 }}>{saving ? "GUARDANDO…" : `▷ REGISTRAR ${selectedPos.length>0?"("+selectedPos.length+")":""}`}</button>
               </Panel>
-
               {dailyStats.filter(d=>d.date===selectedDate).map(d=>(
                 <Panel key={d.date} title="RESUMEN HOY">
                   <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:10 }}>
                     <MiniStat label="m² MD" value={fmt2(d.areaMD)} color="#4ade80" small/>
                     <MiniStat label="m² P" value={fmt2(d.areaP)} color="#60a5fa" small/>
                     <MiniStat label="m² TOTAL" value={fmt2(d.areaTotal)} color="#e8b84b" small/>
-                    <MiniStat label="Equipo" value={d.equipoCompleto + " pers."} small/>
+                    <MiniStat label="Equipo" value={d.equipoCompleto+" pers."} small/>
                   </div>
                   <div style={{ borderTop:"1px solid #1e2130", paddingTop:8 }}>
                     <div style={{ fontSize:9, color:"#555", letterSpacing:2, marginBottom:6 }}>RENDIMIENTOS m²/persona</div>
@@ -371,16 +680,15 @@ export default function ObraTracker() {
                 </Panel>
               ))}
             </div>
-
             <Panel title="SELECCIONAR ELEMENTOS A MONTAR">
               <div style={{ display:"flex", gap:8, marginBottom:12 }}>
                 <input placeholder="Buscar posición o plano…" value={search} onChange={e=>setSearch(e.target.value)} style={{ ...inp, flex:1, margin:0 }}/>
                 {["TODOS","MD","P"].map(t => (
                   <button key={t} onClick={()=>setFilterTipo(t)} style={{
                     padding:"6px 14px", borderRadius:5, border:"1px solid",
-                    borderColor: filterTipo===t ? (t==="MD"?"#4ade80":t==="P"?"#60a5fa":"#e8b84b") : "#222536",
-                    background: filterTipo===t ? "#1a1d26" : "transparent",
-                    color: filterTipo===t ? (t==="MD"?"#4ade80":t==="P"?"#60a5fa":"#e8b84b") : "#555",
+                    borderColor: filterTipo===t?(t==="MD"?"#4ade80":t==="P"?"#60a5fa":"#e8b84b"):"#222536",
+                    background: filterTipo===t?"#1a1d26":"transparent",
+                    color: filterTipo===t?(t==="MD"?"#4ade80":t==="P"?"#60a5fa":"#e8b84b"):"#555",
                     fontFamily:"'DM Mono',monospace", fontSize:11, cursor:"pointer"
                   }}>{t}</button>
                 ))}
@@ -396,29 +704,29 @@ export default function ObraTracker() {
                     {filteredElements.map(el => {
                       const isMounted = mountedPos.has(el.pos);
                       const isSelected = selectedPos.includes(el.pos);
-                      const tc = el.tipo==="MD" ? "#4ade80" : "#60a5fa";
+                      const tc = el.tipo==="MD"?"#4ade80":"#60a5fa";
                       return (
                         <tr key={el.pos} onClick={()=>!isMounted&&togglePos(el.pos)} style={{
-                          background: isSelected ? "#1a2218" : isMounted ? "#161820" : "transparent",
-                          borderBottom:"1px solid #181b24", cursor: isMounted?"default":"pointer",
-                          opacity: isMounted?0.45:1, transition:"background 0.15s"
+                          background: isSelected?"#1a2218":isMounted?"#161820":"transparent",
+                          borderBottom:"1px solid #181b24", cursor:isMounted?"default":"pointer",
+                          opacity:isMounted?0.45:1, transition:"background 0.15s"
                         }}>
-                          <Td><div style={{ width:14, height:14, borderRadius:3, border:`2px solid ${isSelected?"#e8b84b":"#333"}`, background:isSelected?"#e8b84b":"transparent", display:"flex", alignItems:"center", justifyContent:"center" }}>{isSelected&&<span style={{ fontSize:9, color:"#0d0f14", fontWeight:"bold" }}>✓</span>}</div></Td>
-                          <Td><span style={{ color:tc, fontSize:9, border:`1px solid ${tc}44`, padding:"1px 6px", borderRadius:8 }}>{el.tipo}</span></Td>
+                          <Td><div style={{ width:14,height:14,borderRadius:3,border:`2px solid ${isSelected?"#e8b84b":"#333"}`,background:isSelected?"#e8b84b":"transparent",display:"flex",alignItems:"center",justifyContent:"center" }}>{isSelected&&<span style={{ fontSize:9,color:"#0d0f14",fontWeight:"bold" }}>✓</span>}</div></Td>
+                          <Td><span style={{ color:tc,fontSize:9,border:`1px solid ${tc}44`,padding:"1px 6px",borderRadius:8 }}>{el.tipo}</span></Td>
                           <Td accent="#ddd8cc">{el.pos}</Td>
                           <Td>{el.plano}</Td><Td>{el.peso}</Td><Td>{el.altura}</Td><Td>{el.longitud}</Td>
                           <Td accent={el.tipo==="MD"?"#4ade8099":undefined}>{fmt2(el.areaBruta)}</Td>
                           <Td accent={el.tipo==="P"?"#60a5fa99":undefined}>{fmt2(el.areaNeta)}</Td>
-                          <Td><span style={{ padding:"1px 7px", borderRadius:10, fontSize:9, background:isMounted?"#14281a":"#1e1e1e", color:isMounted?"#4ade80":"#555", border:`1px solid ${isMounted?"#22c55e33":"#2a2d3a"}` }}>{isMounted?"MONTADO":"PENDIENTE"}</span></Td>
+                          <Td><span style={{ padding:"1px 7px",borderRadius:10,fontSize:9,background:isMounted?"#14281a":"#1e1e1e",color:isMounted?"#4ade80":"#555",border:`1px solid ${isMounted?"#22c55e33":"#2a2d3a"}` }}>{isMounted?"MONTADO":"PENDIENTE"}</span></Td>
                         </tr>
                       );
                     })}
                   </tbody>
                   <tfoot>
                     <tr style={{ borderTop:"1px solid #2a2d3a" }}>
-                      <td colSpan={7} style={{ padding:"8px 10px", color:"#555", textAlign:"right", fontSize:10, letterSpacing:1 }}>TOTALES FILTRADOS</td>
-                      <td style={{ padding:"8px 10px", color:"#4ade80", fontSize:11, fontWeight:"bold" }}>{fmt2(filteredElements.filter(e=>e.tipo==="MD").reduce((s,e)=>s+e.areaBruta,0))} m²</td>
-                      <td style={{ padding:"8px 10px", color:"#60a5fa", fontSize:11, fontWeight:"bold" }}>{fmt2(filteredElements.filter(e=>e.tipo==="P").reduce((s,e)=>s+e.areaNeta,0))} m²</td>
+                      <td colSpan={7} style={{ padding:"8px 10px",color:"#555",textAlign:"right",fontSize:10,letterSpacing:1 }}>TOTALES FILTRADOS</td>
+                      <td style={{ padding:"8px 10px",color:"#4ade80",fontSize:11,fontWeight:"bold" }}>{fmt2(filteredElements.filter(e=>e.tipo==="MD").reduce((s,e)=>s+e.areaBruta,0))} m²</td>
+                      <td style={{ padding:"8px 10px",color:"#60a5fa",fontSize:11,fontWeight:"bold" }}>{fmt2(filteredElements.filter(e=>e.tipo==="P").reduce((s,e)=>s+e.areaNeta,0))} m²</td>
                       <td/>
                     </tr>
                   </tfoot>
@@ -436,9 +744,9 @@ export default function ObraTracker() {
               {["TODOS","MD","P"].map(t => (
                 <button key={t} onClick={()=>setFilterTipo(t)} style={{
                   padding:"6px 14px", borderRadius:5, border:"1px solid",
-                  borderColor: filterTipo===t ? (t==="MD"?"#4ade80":t==="P"?"#60a5fa":"#e8b84b") : "#222536",
-                  background: filterTipo===t ? "#1a1d26" : "transparent",
-                  color: filterTipo===t ? (t==="MD"?"#4ade80":t==="P"?"#60a5fa":"#e8b84b") : "#555",
+                  borderColor: filterTipo===t?(t==="MD"?"#4ade80":t==="P"?"#60a5fa":"#e8b84b"):"#222536",
+                  background: filterTipo===t?"#1a1d26":"transparent",
+                  color: filterTipo===t?(t==="MD"?"#4ade80":t==="P"?"#60a5fa":"#e8b84b"):"#555",
                   fontFamily:"'DM Mono',monospace", fontSize:11, cursor:"pointer"
                 }}>{t}</button>
               ))}
@@ -454,16 +762,16 @@ export default function ObraTracker() {
                   {filteredElements.map(el => {
                     const isMounted = mountedPos.has(el.pos);
                     const logEntry = logs.find(l=>l.pos===el.pos);
-                    const tc = el.tipo==="MD" ? "#4ade80" : "#60a5fa";
+                    const tc = el.tipo==="MD"?"#4ade80":"#60a5fa";
                     return (
                       <tr key={el.pos} style={{ borderBottom:"1px solid #181b24" }}>
-                        <Td><span style={{ color:tc, fontSize:9, border:`1px solid ${tc}44`, padding:"1px 6px", borderRadius:8 }}>{el.tipo}</span></Td>
+                        <Td><span style={{ color:tc,fontSize:9,border:`1px solid ${tc}44`,padding:"1px 6px",borderRadius:8 }}>{el.tipo}</span></Td>
                         <Td accent="#ddd8cc">{el.pos}</Td>
                         <Td>{el.plano}</Td><Td>{el.peso}</Td><Td>{el.altura}</Td><Td>{el.longitud}</Td><Td>{el.espesor}</Td>
                         <Td accent={el.tipo==="MD"?"#4ade8099":undefined}>{fmt2(el.areaBruta)}</Td>
                         <Td accent={el.tipo==="P"?"#60a5fa99":undefined}>{fmt2(el.areaNeta)}</Td>
-                        <Td><span style={{ padding:"1px 7px", borderRadius:10, fontSize:9, background:isMounted?"#14281a":"#1e1e1e", color:isMounted?"#4ade80":"#555", border:`1px solid ${isMounted?"#22c55e33":"#2a2d3a"}` }}>{isMounted?`MONTADO ${logEntry?.date||""}`:"PENDIENTE"}</span></Td>
-                        <Td>{isMounted&&<button onClick={()=>desmontar(el.pos)} style={{ background:"none", border:"1px solid #3a1a1a", color:"#f87171", padding:"2px 8px", borderRadius:4, cursor:"pointer", fontFamily:"'DM Mono',monospace", fontSize:9 }}>desmontar</button>}</Td>
+                        <Td><span style={{ padding:"1px 7px",borderRadius:10,fontSize:9,background:isMounted?"#14281a":"#1e1e1e",color:isMounted?"#4ade80":"#555",border:`1px solid ${isMounted?"#22c55e33":"#2a2d3a"}` }}>{isMounted?`MONTADO ${logEntry?.date||""}`:"PENDIENTE"}</span></Td>
+                        <Td>{isMounted&&<button onClick={()=>desmontar(el.pos)} style={{ background:"none",border:"1px solid #3a1a1a",color:"#f87171",padding:"2px 8px",borderRadius:4,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontSize:9 }}>desmontar</button>}</Td>
                       </tr>
                     );
                   })}
@@ -477,8 +785,8 @@ export default function ObraTracker() {
         {activeTab === "historial" && (
           <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:20 }}>
             <Panel title="RENDIMIENTO POR DÍA">
-              {dailyStats.length === 0 && <div style={{ color:"#555", fontSize:12 }}>Sin registros aún.</div>}
-              {dailyStats.map(d => (
+              {dailyStats.length===0 && <div style={{ color:"#555", fontSize:12 }}>Sin registros aún.</div>}
+              {dailyStats.map(d=>(
                 <div key={d.date} style={{ padding:"12px 0", borderBottom:"1px solid #181b24" }}>
                   <div style={{ display:"flex", justifyContent:"space-between", marginBottom:6 }}>
                     <span style={{ color:"#e8b84b", fontSize:12 }}>{d.date}</span>
@@ -501,16 +809,15 @@ export default function ObraTracker() {
                 </div>
               ))}
             </Panel>
-
             <Panel title="AVANCE POR PLANO">
               {[...new Set(elements.map(e=>e.plano))].sort().map(pl => {
                 const elems = elements.filter(e=>e.plano===pl);
                 const tipo = elems[0]?.tipo;
                 const mounted = elems.filter(e=>mountedPos.has(e.pos));
-                const areaTotal   = elems.reduce((s,e)=>s+(tipo==="MD"?e.areaBruta:e.areaNeta),0);
+                const areaTotal = elems.reduce((s,e)=>s+(tipo==="MD"?e.areaBruta:e.areaNeta),0);
                 const areaMounted = mounted.reduce((s,e)=>s+(tipo==="MD"?e.areaBruta:e.areaNeta),0);
-                const p = areaTotal>0 ? (areaMounted/areaTotal)*100 : 0;
-                const color = tipo==="MD" ? "#4ade80" : "#60a5fa";
+                const p = areaTotal>0?(areaMounted/areaTotal)*100:0;
+                const color = tipo==="MD"?"#4ade80":"#60a5fa";
                 return (
                   <div key={pl} style={{ marginBottom:14 }}>
                     <div style={{ display:"flex", justifyContent:"space-between", fontSize:11, marginBottom:4 }}>
@@ -529,43 +836,75 @@ export default function ObraTracker() {
 
         {/* ── SEMANAL ── */}
         {activeTab === "semanal" && (
-          <Panel title="RESUMEN SEMANAL">
-            {weeklyStats.length === 0 && <div style={{ color:"#555", fontSize:12 }}>Sin registros aún.</div>}
-            <table style={{ width:"100%", borderCollapse:"collapse", fontSize:11 }}>
-              <thead>
-                <tr style={{ color:"#444", fontSize:9, letterSpacing:2 }}>
-                  <Th>SEMANA</Th><Th>m² MD</Th><Th>m² P</Th><Th>m² TOTAL</Th><Th>DÍAS</Th><Th>REND. EQUIPO m²/p</Th>
-                </tr>
-              </thead>
-              <tbody>
-                {weeklyStats.map(w => {
-                  const mdArea = dailyStats.filter(d=>getWeekNumber(d.date)===w.week).reduce((s,d)=>s+d.areaMD,0);
-                  const pArea  = dailyStats.filter(d=>getWeekNumber(d.date)===w.week).reduce((s,d)=>s+d.areaP,0);
-                  return (
-                    <tr key={w.week} style={{ borderBottom:"1px solid #181b24" }}>
-                      <Td accent="#e8b84b">{w.week}</Td>
-                      <Td accent="#4ade80">{fmt2(mdArea)}</Td>
-                      <Td accent="#60a5fa">{fmt2(pArea)}</Td>
-                      <Td accent="#e8b84b">{fmt2(w.areaTotal)}</Td>
-                      <Td>{w.days}</Td>
-                      <Td accent="#e8b84b">{fmt2(w.rendEquipoAvg)}</Td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-              {weeklyStats.length > 0 && (
-                <tfoot>
-                  <tr style={{ borderTop:"2px solid #2a2d3a" }}>
-                    <td style={{ padding:"8px 10px", color:"#555", fontSize:10 }}>TOTAL</td>
-                    <td style={{ padding:"8px 10px", color:"#4ade80", fontSize:11, fontWeight:"bold" }}>{fmt2(dailyStats.reduce((s,d)=>s+d.areaMD,0))} m²</td>
-                    <td style={{ padding:"8px 10px", color:"#60a5fa", fontSize:11, fontWeight:"bold" }}>{fmt2(dailyStats.reduce((s,d)=>s+d.areaP,0))} m²</td>
-                    <td style={{ padding:"8px 10px", color:"#e8b84b", fontSize:11, fontWeight:"bold" }}>{fmt2(dailyStats.reduce((s,d)=>s+d.areaTotal,0))} m²</td>
-                    <td colSpan={2}/>
+          <div>
+            {/* Selector semana + botones export */}
+            <div style={{ display:"flex", gap:12, alignItems:"center", marginBottom:16, flexWrap:"wrap" }}>
+              <div>
+                <Label>Semana para exportar</Label>
+                <select value={selectedWeek} onChange={e=>setSelectedWeek(e.target.value)}
+                  style={{ ...inp, width:"auto", margin:0 }}>
+                  {weeklyStats.map(w=>(
+                    <option key={w.week} value={w.week}>{w.week}</option>
+                  ))}
+                  {weeklyStats.length===0 && <option value={getWeekNumber(TODAY)}>{getWeekNumber(TODAY)}</option>}
+                </select>
+              </div>
+              <div style={{ display:"flex", gap:8, alignItems:"flex-end", paddingBottom:2 }}>
+                <button onClick={()=>{
+                  if(!currentWeekData){ alert("Sin datos para esta semana"); return; }
+                  generatePDF(currentWeekData, elements, dailyStats, programaAcum, selectedWeek);
+                }} style={{
+                  background:"#1a1d26", border:"1px solid #e8b84b44", color:"#e8b84b",
+                  padding:"8px 16px", borderRadius:6, cursor:"pointer",
+                  fontFamily:"'DM Mono',monospace", fontSize:11, letterSpacing:1,
+                }}>↓ PDF SEMANAL</button>
+                <button onClick={()=>{
+                  if(!currentWeekData){ alert("Sin datos para esta semana"); return; }
+                  generateExcel(currentWeekData, elements, dailyStats, selectedWeek);
+                }} style={{
+                  background:"#1a1d26", border:"1px solid #4ade8044", color:"#4ade80",
+                  padding:"8px 16px", borderRadius:6, cursor:"pointer",
+                  fontFamily:"'DM Mono',monospace", fontSize:11, letterSpacing:1,
+                }}>↓ EXCEL SEMANAL</button>
+              </div>
+            </div>
+
+            <Panel title="RESUMEN SEMANAL">
+              {weeklyStats.length===0 && <div style={{ color:"#555", fontSize:12 }}>Sin registros aún.</div>}
+              <table style={{ width:"100%", borderCollapse:"collapse", fontSize:11 }}>
+                <thead>
+                  <tr style={{ color:"#444", fontSize:9, letterSpacing:2 }}>
+                    <Th>SEMANA</Th><Th>m² MD</Th><Th>m² P</Th><Th>m² TOTAL</Th><Th>DÍAS EFEC.</Th><Th>REND. EFECTIVO m²/día</Th><Th>REND. EQUIPO m²/p</Th>
                   </tr>
-                </tfoot>
-              )}
-            </table>
-          </Panel>
+                </thead>
+                <tbody>
+                  {weeklyStats.map(w=>(
+                    <tr key={w.week} style={{ borderBottom:"1px solid #181b24", background:w.week===selectedWeek?"#1a1d26":"transparent" }}
+                      onClick={()=>setSelectedWeek(w.week)}>
+                      <Td accent="#e8b84b">{w.week}</Td>
+                      <Td accent="#4ade80">{fmt2(w.areaMD)}</Td>
+                      <Td accent="#60a5fa">{fmt2(w.areaP)}</Td>
+                      <Td accent="#e8b84b">{fmt2(w.areaTotal)}</Td>
+                      <Td>{w.diasEfectivos}</Td>
+                      <Td accent="#e8b84b">{fmt2(w.rendEfectivo)}</Td>
+                      <Td accent="#e8b84b">{fmt2(w.rendEquipo)}</Td>
+                    </tr>
+                  ))}
+                </tbody>
+                {weeklyStats.length>0&&(
+                  <tfoot>
+                    <tr style={{ borderTop:"2px solid #2a2d3a" }}>
+                      <td style={{ padding:"8px 10px",color:"#555",fontSize:10 }}>TOTAL</td>
+                      <td style={{ padding:"8px 10px",color:"#4ade80",fontSize:11,fontWeight:"bold" }}>{fmt2(dailyStats.reduce((s,d)=>s+d.areaMD,0))} m²</td>
+                      <td style={{ padding:"8px 10px",color:"#60a5fa",fontSize:11,fontWeight:"bold" }}>{fmt2(dailyStats.reduce((s,d)=>s+d.areaP,0))} m²</td>
+                      <td style={{ padding:"8px 10px",color:"#e8b84b",fontSize:11,fontWeight:"bold" }}>{fmt2(dailyStats.reduce((s,d)=>s+d.areaTotal,0))} m²</td>
+                      <td colSpan={3}/>
+                    </tr>
+                  </tfoot>
+                )}
+              </table>
+            </Panel>
+          </div>
         )}
       </div>
     </div>
@@ -606,4 +945,3 @@ function ExportBtn({ onClick, label }) {
   );
 }
 const inp = { width:"100%", padding:"7px 9px", background:"#0d0f14", border:"1px solid #222536", borderRadius:5, color:"#ddd8cc", fontFamily:"'DM Mono',monospace", fontSize:11, boxSizing:"border-box" };
-
