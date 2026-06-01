@@ -379,7 +379,7 @@ function AdminPanel({ obras, onBack, onObraCreated, setError }) {
             {programaRows.length>0&&(
               <table style={{ width:"100%",borderCollapse:"collapse",fontSize:11,marginTop:16 }}>
                 <thead><tr><Th>SEMANA</Th><Th>m² PROG.</Th></tr></thead>
-                <tbody key={`${filterTorre}-${filterTipo}-${filterPiso}-${filterLote}-${filterEstado}-${filterSearch}`}>{programaRows.map((r,i)=><tr key={i} style={{ borderBottom:"1px solid #f1f5f9" }}><Td accent="#d97706">{r.semana}</Td><Td>{r.meta}</Td></tr>)}</tbody>
+                <tbody>{programaRows.map((r,i)=><tr key={i} style={{ borderBottom:"1px solid #f1f5f9" }}><Td accent="#d97706">{r.semana}</Td><Td>{r.meta}</Td></tr>)}</tbody>
               </table>
             )}
           </Panel>
