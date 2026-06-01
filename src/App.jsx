@@ -1123,21 +1123,23 @@ function ObraView({ obra, onBack, setError, isAdmin, onObraUpdated }) {
                 </div>
               ))}
             </Panel>
-            <Panel title="AVANCE POR PLANO">
-              {[...new Set(elements.map(e=>e.piso).filter(Boolean))].sort().map(piso=>{
-                const elems=elements.filter(e=>e.piso===piso);
+            <Panel title="AVANCE POR TORRE Y PISO">
+              {[...new Set(elements.map(e=>`${e.torre}||${e.piso}`).filter(Boolean))].sort().map(key=>{
+                const [torre,piso] = key.split("||");
+                const elems=elements.filter(e=>e.torre===torre&&e.piso===piso);
                 const mounted=elems.filter(e=>montadosPos.has(e.pos));
                 const areaTotal=elems.reduce((s,e)=>s+e.area,0);
                 const areaMounted=mounted.reduce((s,e)=>s+e.area,0);
                 const p=areaTotal>0?(areaMounted/areaTotal)*100:0;
+                const color = p>=75?"#16a34a":p>=40?"#d97706":"#2563eb";
                 return (
-                  <div key={piso} style={{ marginBottom:14 }}>
+                  <div key={key} style={{ marginBottom:14 }}>
                     <div style={{ display:"flex",justifyContent:"space-between",fontSize:11,marginBottom:4 }}>
-                      <span style={{ color:"#1e293b" }}>{piso}</span>
-                      <span style={{ color:"#d97706",fontSize:10 }}>{mounted.length}/{elems.length} · {fmt2(areaMounted)}/{fmt2(areaTotal)} m² · {fmtPct(p)}</span>
+                      <span style={{ color:"#1e293b",fontWeight:"bold" }}>{torre} <span style={{ color:"#94a3b8",fontWeight:"normal" }}>· {piso}</span></span>
+                      <span style={{ color,fontSize:10 }}>{mounted.length}/{elems.length} · {fmt2(areaMounted)}/{fmt2(areaTotal)} m² · {fmtPct(p)}</span>
                     </div>
                     <div style={{ background:"#f1f5f9",borderRadius:4,height:7 }}>
-                      <div style={{ height:7,borderRadius:4,width:p+"%",background:"#d97706",transition:"width 0.5s" }}/>
+                      <div style={{ height:7,borderRadius:4,width:p+"%",background:color,transition:"width 0.5s" }}/>
                     </div>
                   </div>
                 );
@@ -1151,17 +1153,12 @@ function ObraView({ obra, onBack, setError, isAdmin, onObraUpdated }) {
           <div>
             <div style={{ display:"flex",gap:12,alignItems:"flex-end",marginBottom:16,flexWrap:"wrap" }}>
               <div>
-                <Label>Semana a exportar</Label>
+                <Label>Semana seleccionada</Label>
                 <select value={selectedWeek} onChange={e=>setSelectedWeek(e.target.value)} style={{ ...inp,width:"auto",margin:0 }}>
                   {weeklyStats.map(w=><option key={w.week} value={w.week}>{w.week}</option>)}
                   {weeklyStats.length===0&&<option value={getWeekNumber(TODAY)}>{getWeekNumber(TODAY)}</option>}
                 </select>
               </div>
-              <button onClick={()=>{ if(!currentWeekData){alert("Sin datos para esta semana");return;} generatePDF(currentWeekData,elements,dailyStats,selectedWeek,obra.nombre,programaAcum); }} style={{ ...btnPrimary,background:"#d97706" }}>↓ PDF SEMANAL</button>
-              <button onClick={()=>{ if(!currentWeekData){alert("Sin datos para esta semana");return;} generateExcel(currentWeekData,elements,dailyStats,selectedWeek); }} style={{ ...btnPrimary,background:"#16a34a" }}>↓ EXCEL SEMANAL</button>
-              <div style={{ width:1,background:"#cbd5e1",height:32,margin:"0 4px" }}/>
-              <button onClick={()=>generateFullPDF(elements,dailyStats,weeklyStats,programaAcum,obra.nombre)} style={{ ...btnPrimary,background:"#7c3aed" }}>↓ PDF COMPLETO</button>
-              <button onClick={()=>generateFullExcel(elements,dailyStats,weeklyStats,obra.nombre)} style={{ ...btnPrimary,background:"#0891b2" }}>↓ EXCEL COMPLETO</button>
             </div>
             <Panel title="RESUMEN SEMANAL">
               {weeklyStats.length===0&&<div style={{ color:"#94a3b8",fontSize:12 }}>Sin registros.</div>}
@@ -1188,13 +1185,42 @@ function ObraView({ obra, onBack, setError, isAdmin, onObraUpdated }) {
 
         {/* ── CURVA S ── */}
         {activeTab==="curvaS" && (
-          <Panel title="CURVA S — AVANCE PROGRAMADO vs REAL">
-            {programaAcum.length===0?(
-              <div style={{ color:"#94a3b8",fontSize:12,textAlign:"center",padding:40 }}>
-                No hay programa cargado.<br/><span style={{ fontSize:10 }}>El admin puede ingresarlo desde Panel Admin → Programa Semanal.</span>
+          <div>
+            <Panel title="CURVA S — AVANCE PROGRAMADO vs REAL">
+              {programaAcum.length===0?(
+                <div style={{ color:"#94a3b8",fontSize:12,textAlign:"center",padding:40 }}>
+                  No hay programa cargado.<br/><span style={{ fontSize:10 }}>El admin puede ingresarlo desde Panel Admin → Programa Semanal.</span>
+                </div>
+              ):<CurvaS data={programaAcum}/>}
+            </Panel>
+            <div style={{ background:"#f8fafc",border:"1px solid #cbd5e1",borderRadius:10,padding:18,marginBottom:16 }}>
+              <div style={{ fontSize:9,letterSpacing:3,color:"#94a3b8",marginBottom:14,borderBottom:"1px solid #e2e8f0",paddingBottom:8 }}>EXPORTAR INFORMES</div>
+              <div style={{ display:"flex",gap:10,flexWrap:"wrap",alignItems:"center" }}>
+                <div>
+                  <div style={{ fontSize:9,color:"#64748b",letterSpacing:1,marginBottom:4 }}>SEMANA</div>
+                  <select value={selectedWeek} onChange={e=>setSelectedWeek(e.target.value)} style={{ ...inp,width:"auto",margin:0 }}>
+                    {weeklyStats.map(w=><option key={w.week} value={w.week}>{w.week}</option>)}
+                    {weeklyStats.length===0&&<option value={getWeekNumber(TODAY)}>{getWeekNumber(TODAY)}</option>}
+                  </select>
+                </div>
+                <div style={{ display:"flex",flexDirection:"column",gap:4 }}>
+                  <div style={{ fontSize:9,color:"#64748b",letterSpacing:1,marginBottom:2 }}>INFORME SEMANAL</div>
+                  <div style={{ display:"flex",gap:8 }}>
+                    <button onClick={()=>{ if(!currentWeekData){alert("Sin datos para esta semana");return;} generatePDF(currentWeekData,elements,dailyStats,selectedWeek,obra.nombre,programaAcum); }} style={{ ...btnPrimary,background:"#d97706" }}>↓ PDF SEMANAL</button>
+                    <button onClick={()=>{ if(!currentWeekData){alert("Sin datos para esta semana");return;} generateExcel(currentWeekData,elements,dailyStats,selectedWeek); }} style={{ ...btnPrimary,background:"#16a34a" }}>↓ EXCEL SEMANAL</button>
+                  </div>
+                </div>
+                <div style={{ width:1,background:"#cbd5e1",height:48,margin:"0 4px" }}/>
+                <div style={{ display:"flex",flexDirection:"column",gap:4 }}>
+                  <div style={{ fontSize:9,color:"#64748b",letterSpacing:1,marginBottom:2 }}>REPORTE COMPLETO DE OBRA</div>
+                  <div style={{ display:"flex",gap:8 }}>
+                    <button onClick={()=>generateFullPDF(elements,dailyStats,weeklyStats,programaAcum,obra.nombre)} style={{ ...btnPrimary,background:"#7c3aed" }}>↓ PDF COMPLETO</button>
+                    <button onClick={()=>generateFullExcel(elements,dailyStats,weeklyStats,obra.nombre)} style={{ ...btnPrimary,background:"#0891b2" }}>↓ EXCEL COMPLETO</button>
+                  </div>
+                </div>
               </div>
-            ):<CurvaS data={programaAcum}/>}
-          </Panel>
+            </div>
+          </div>
         )}
       </div>
     </div>
