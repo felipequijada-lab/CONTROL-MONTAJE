@@ -379,7 +379,7 @@ function AdminPanel({ obras, onBack, onObraCreated, setError }) {
             {programaRows.length>0&&(
               <table style={{ width:"100%",borderCollapse:"collapse",fontSize:11,marginTop:16 }}>
                 <thead><tr><Th>SEMANA</Th><Th>m² PROG.</Th></tr></thead>
-                <tbody>{programaRows.map((r,i)=><tr key={i} style={{ borderBottom:"1px solid #f1f5f9" }}><Td accent="#d97706">{r.semana}</Td><Td>{r.meta}</Td></tr>)}</tbody>
+                <tbody key={`${filterTorre}-${filterTipo}-${filterPiso}-${filterLote}-${filterEstado}-${filterSearch}`}>{programaRows.map((r,i)=><tr key={i} style={{ borderBottom:"1px solid #f1f5f9" }}><Td accent="#d97706">{r.semana}</Td><Td>{r.meta}</Td></tr>)}</tbody>
               </table>
             )}
           </Panel>
@@ -766,7 +766,7 @@ function ObraView({ obra, onBack, setError }) {
                       ))}
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody key={`${filterTorre}-${filterTipo}-${filterPiso}-${filterLote}-${filterEstado}-${filterSearch}`}>
                     {filteredElements.map(el => {
                       const estado = getEstado(el.pos);
                       const isMounted = estado==="montado";
@@ -854,7 +854,7 @@ function ObraView({ obra, onBack, setError }) {
                     <Th>ESTADO</Th><Th>F. RECEPCIÓN</Th><Th>F. MONTAJE</Th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody key={`${filterTorre}-${filterTipo}-${filterPiso}-${filterLote}-${filterEstado}-${filterSearch}`}>
                   {filteredElements.map(el=>{
                     const estado = getEstado(el.pos);
                     const logR = logs.find(l=>l.recibidos.includes(el.pos));
@@ -951,7 +951,7 @@ function ObraView({ obra, onBack, setError }) {
               {weeklyStats.length===0&&<div style={{ color:"#94a3b8",fontSize:12 }}>Sin registros.</div>}
               <table style={{ width:"100%",borderCollapse:"collapse",fontSize:11 }}>
                 <thead><tr style={{ background:"#f1f5f9" }}><Th>SEMANA</Th><Th>m² RECIBIDOS</Th><Th>m² MD/MDT</Th><Th>m² P</Th><Th>m² MONTADOS</Th><Th>DÍAS EFEC.</Th><Th>REND. EFEC.</Th><Th>REND. EQUIPO</Th></tr></thead>
-                <tbody>
+                <tbody key={`${filterTorre}-${filterTipo}-${filterPiso}-${filterLote}-${filterEstado}-${filterSearch}`}>
                   {weeklyStats.map(w=>(
                     <tr key={w.week} onClick={()=>setSelectedWeek(w.week)} style={{ borderBottom:"1px solid #f1f5f9",background:w.week===selectedWeek?"#fef9c3":"#ffffff",cursor:"pointer" }}>
                       <Td accent="#d97706">{w.week}</Td>
