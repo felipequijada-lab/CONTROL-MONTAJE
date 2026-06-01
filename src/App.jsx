@@ -45,6 +45,194 @@ const PERSONAL_CARGOS = [
 
 const defaultPersonal = () => ({ coordinadores: 1, calidad: 1, lideres: 1, montajistas: 2, ayudantes: 2 });
 
+
+// ── Full Report PDF ───────────────────────────────────────────────────────────
+function generateFullPDF(elements, dailyStats, weeklyStats, programaAcum, obraName) {
+  const fecha = new Date().toLocaleDateString('es-CL');
+  const totalArea = elements.reduce((s,e)=>s+e.area,0);
+  const mountedEls = elements.filter(e=>dailyStats.some(d=>d.montados.includes(e.pos)));
+  const receivedEls = elements.filter(e=>dailyStats.some(d=>d.recibidos.includes(e.pos)));
+  const mountedArea = mountedEls.reduce((s,e)=>s+e.area,0);
+  const receivedArea = [...mountedEls,...elements.filter(e=>receivedEls.map(r=>r.pos).includes(e.pos)&&!mountedEls.map(m=>m.pos).includes(e.pos))].reduce((s,e)=>s+e.area,0);
+  const pctMounted = totalArea>0?(mountedArea/totalArea)*100:0;
+
+  const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"/>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:'Courier New',monospace;background:#e2e8f0;color:#1e293b;padding:20px;}
+.header{background:#fff;border:1px solid #cbd5e1;border-radius:8px;padding:16px 20px;display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;}
+.title{color:#d97706;font-size:18px;font-weight:bold;}
+.subtitle{color:#94a3b8;font-size:10px;letter-spacing:2px;margin-top:4px;}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px;}
+.kpi{background:#fff;border:1px solid #cbd5e1;border-radius:6px;padding:10px;text-align:center;}
+.kpi-label{color:#94a3b8;font-size:8px;letter-spacing:1px;margin-bottom:4px;}
+.kpi-value{font-size:18px;font-weight:bold;}
+.section{background:#fff;border:1px solid #cbd5e1;border-radius:6px;margin-bottom:12px;page-break-inside:avoid;}
+.section-title{color:#d97706;font-size:9px;letter-spacing:3px;padding:10px 14px;border-bottom:1px solid #cbd5e1;}
+table{width:100%;border-collapse:collapse;}
+th{background:#f1f5f9;color:#64748b;font-size:8px;letter-spacing:1px;padding:5px 8px;text-align:left;}
+td{padding:5px 8px;font-size:9px;color:#475569;border-bottom:1px solid #f1f5f9;}
+.amber{color:#d97706;}.green{color:#16a34a;}.blue{color:#2563eb;}.red{color:#dc2626;}
+.footer{text-align:center;color:#94a3b8;font-size:8px;margin-top:16px;border-top:1px solid #cbd5e1;padding-top:8px;}
+@media print{body{background:#fff!important;}page-break-after:always;}
+</style></head><body>
+<div class="header">
+  <div><div class="title">◈ REPORTE COMPLETO DE OBRA</div><div class="subtitle">BAUMAX SPA · ${obraName}</div></div>
+  <div style="text-align:right"><div style="color:#94a3b8;font-size:9px">GENERADO</div><div style="font-size:12px;font-weight:bold">${fecha}</div></div>
+</div>
+
+<div class="kpis">
+  <div class="kpi"><div class="kpi-label">TOTAL ELEMENTOS</div><div class="kpi-value amber">${elements.length}</div></div>
+  <div class="kpi"><div class="kpi-label">MONTADOS</div><div class="kpi-value green">${mountedEls.length}</div></div>
+  <div class="kpi"><div class="kpi-label">m² MONTADOS</div><div class="kpi-value green">${fmt2(mountedArea)}</div></div>
+  <div class="kpi"><div class="kpi-label">% AVANCE</div><div class="kpi-value ${pctMounted>=75?'green':pctMounted>=40?'amber':'red'}">${fmtPct(pctMounted)}</div></div>
+</div>
+
+<div class="section">
+  <div class="section-title">CURVA S — AVANCE ACUMULADO</div>
+  <div style="padding:12px">
+    ${programaAcum.length>0?`<img id="curvaSFullImg" src="" style="width:100%;border-radius:4px"/>`:
+    '<div style="text-align:center;color:#94a3b8;padding:20px;font-size:11px">Sin programa cargado</div>'}
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-title">RESUMEN SEMANAL</div>
+  <table>
+    <tr><th>SEMANA</th><th>m² RECIBIDOS</th><th>m² MD/MDT</th><th>m² P</th><th>m² TOTAL</th><th>DÍAS EFEC.</th><th>REND. EFEC.</th><th>REND. EQUIPO</th></tr>
+    ${weeklyStats.map(w=>`<tr>
+      <td class="amber">${w.week}</td>
+      <td class="blue">${fmt2(w.areaRecibida)}</td>
+      <td class="green">${fmt2(w.areaMD)}</td>
+      <td class="blue">${fmt2(w.areaP)}</td>
+      <td class="amber">${fmt2(w.areaTotal)}</td>
+      <td>${w.diasEfectivos}</td>
+      <td>${fmt2(w.rendEfectivo)}</td>
+      <td>${fmt2(w.rendEquipo)}</td>
+    </tr>`).join('')}
+    <tr style="background:#f1f5f9;font-weight:bold">
+      <td class="amber">TOTAL</td>
+      <td class="blue">${fmt2(weeklyStats.reduce((s,w)=>s+w.areaRecibida,0))}</td>
+      <td class="green">${fmt2(weeklyStats.reduce((s,w)=>s+w.areaMD,0))}</td>
+      <td class="blue">${fmt2(weeklyStats.reduce((s,w)=>s+w.areaP,0))}</td>
+      <td class="amber">${fmt2(weeklyStats.reduce((s,w)=>s+w.areaTotal,0))}</td>
+      <td>${weeklyStats.reduce((s,w)=>s+w.diasEfectivos,0)}</td>
+      <td colspan="2"></td>
+    </tr>
+  </table>
+</div>
+
+<div class="section">
+  <div class="section-title">INVENTARIO COMPLETO DE ELEMENTOS</div>
+  <table>
+    <tr><th>LOTE</th><th>TORRE</th><th>PISO</th><th>TIPO</th><th>POSICIÓN</th><th>ÁREA m²</th><th>ESTADO</th><th>F. RECEPCIÓN</th><th>F. MONTAJE</th></tr>
+    ${elements.map(el=>{
+      const logM = dailyStats.find(d=>d.montados.includes(el.pos));
+      const logR = dailyStats.find(d=>d.recibidos.includes(el.pos));
+      const isMounted = !!logM;
+      const isReceived = !!logR;
+      const estado = isMounted?"MONTADO":isReceived?"RECIBIDO":"PENDIENTE";
+      const estadoColor = isMounted?"green":isReceived?"blue":"";
+      return `<tr>
+        <td>${el.lote||""}</td>
+        <td>${el.torre||""}</td>
+        <td>${el.piso||""}</td>
+        <td class="${TIPOS_MD.includes(el.tipo)?"green":"blue"}">${el.tipo}</td>
+        <td>${el.pos}</td>
+        <td>${fmt2(el.area)}</td>
+        <td class="${estadoColor}">${estado}</td>
+        <td>${logR?.date||""}</td>
+        <td>${logM?.date||""}</td>
+      </tr>`;
+    }).join('')}
+  </table>
+</div>
+
+<div class="section">
+  <div class="section-title">INCIDENCIAS REGISTRADAS</div>
+  <table>
+    <tr><th>FECHA</th><th>SEMANA</th><th>OBSERVACIÓN</th></tr>
+    ${dailyStats.filter(d=>d.note).map(d=>`<tr><td class="amber">${d.date}</td><td>${getWeekNumber(d.date)}</td><td>${d.note}</td></tr>`).join('')}
+    ${dailyStats.filter(d=>d.note).length===0?'<tr><td colspan="3" style="text-align:center;color:#94a3b8">Sin incidencias registradas</td></tr>':''}
+  </table>
+</div>
+
+<div class="footer">Reporte completo generado automáticamente · Control de Montaje · Baumax SPA · ${fecha}</div>
+</body></html>`;
+
+  const existingCanvas = document.getElementById('curvaSMain');
+  const curvaSImg = existingCanvas ? existingCanvas.toDataURL('image/png') : null;
+
+  let finalHtml = html;
+  if (curvaSImg) {
+    finalHtml = html.replace('src=""', `src="${curvaSImg}"`);
+  }
+
+  const iframe = document.createElement('iframe');
+  iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:800px;height:600px;border:0;opacity:0;';
+  document.body.appendChild(iframe);
+  const doc = iframe.contentWindow.document;
+  doc.open(); doc.write(finalHtml); doc.close();
+  setTimeout(() => {
+    iframe.contentWindow.focus();
+    iframe.contentWindow.print();
+    setTimeout(()=>document.body.removeChild(iframe),1000);
+  }, 600);
+}
+
+// ── Full Report Excel ─────────────────────────────────────────────────────────
+function generateFullExcel(elements, dailyStats, weeklyStats, obraName) {
+  const wb = XLSX.utils.book_new();
+
+  // Sheet 1: Resumen por semana
+  const semRows = [
+    [`REPORTE COMPLETO — ${obraName}`],[],
+    ["RESUMEN SEMANAL"],
+    ["Semana","m² Recibidos","m² MD/MDT","m² Prelosas","m² Total","Días Efectivos","Rend. Efectivo m²/día","Rend. Equipo m²/p"],
+    ...weeklyStats.map(w=>[w.week, parseFloat(fmt2(w.areaRecibida)), parseFloat(fmt2(w.areaMD)), parseFloat(fmt2(w.areaP)), parseFloat(fmt2(w.areaTotal)), w.diasEfectivos, parseFloat(fmt2(w.rendEfectivo)), parseFloat(fmt2(w.rendEquipo))]),
+    [],
+    ["TOTALES",
+      parseFloat(fmt2(weeklyStats.reduce((s,w)=>s+w.areaRecibida,0))),
+      parseFloat(fmt2(weeklyStats.reduce((s,w)=>s+w.areaMD,0))),
+      parseFloat(fmt2(weeklyStats.reduce((s,w)=>s+w.areaP,0))),
+      parseFloat(fmt2(weeklyStats.reduce((s,w)=>s+w.areaTotal,0))),
+      weeklyStats.reduce((s,w)=>s+w.diasEfectivos,0),
+    ],
+  ];
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(semRows), "Resumen Semanal");
+
+  // Sheet 2: Inventario completo
+  const invRows = [["Lote","Torre","Piso","Tipo","Posición","Área m²","Estado","Fecha Recepción","Fecha Montaje"]];
+  elements.forEach(el => {
+    const logM = dailyStats.find(d=>d.montados.includes(el.pos));
+    const logR = dailyStats.find(d=>d.recibidos.includes(el.pos));
+    const estado = logM?"Montado":logR?"Recibido":"Pendiente";
+    invRows.push([el.lote||"", el.torre||"", el.piso||"", el.tipo, el.pos, el.area, estado, logR?.date||"", logM?.date||""]);
+  });
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(invRows), "Inventario");
+
+  // Sheet 3: Registro diario detallado
+  const regRows = [["Fecha","Semana","Elementos Montados","Elementos Recibidos","m² MD","m² P","m² Total","m² Recibidos","Líderes","Montajistas","Ayudantes","Equipo Total","Rend. Líder","Rend. Montajista","Rend. Ayudante","Rend. Equipo","Incidencias"]];
+  dailyStats.forEach(d=>{
+    regRows.push([
+      d.date, getWeekNumber(d.date),
+      d.montados.length, d.recibidos.length,
+      parseFloat(fmt2(d.areaMD)), parseFloat(fmt2(d.areaP)), parseFloat(fmt2(d.areaTotal)), parseFloat(fmt2(d.areaRecibida)),
+      d.personal.lideres, d.personal.montajistas, d.personal.ayudantes, d.equipoCompleto,
+      parseFloat(fmt2(d.rendLider)), parseFloat(fmt2(d.rendMontajista)), parseFloat(fmt2(d.rendAyudante)), parseFloat(fmt2(d.rendEquipo)),
+      d.note||""
+    ]);
+  });
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(regRows), "Registro Diario");
+
+  // Sheet 4: Incidencias
+  const incRows = [["Fecha","Semana","Observación"]];
+  dailyStats.filter(d=>d.note).forEach(d=>incRows.push([d.date, getWeekNumber(d.date), d.note]));
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(incRows), "Incidencias");
+
+  XLSX.writeFile(wb, `reporte_completo_${obraName.replace(/\s+/g,'_')}.xlsx`);
+}
+
 // ── PDF ───────────────────────────────────────────────────────────────────────
 function generatePDF(weekData, elements, dailyStats, weekLabel, obraName, programaAcum) {
   const mdTotal = fmt2(weekData.areaMD);
@@ -1032,6 +1220,9 @@ function ObraView({ obra, onBack, setError }) {
               </div>
               <button onClick={()=>{ if(!currentWeekData){alert("Sin datos");return;} generatePDF(currentWeekData,elements,dailyStats,selectedWeek,obra.nombre,programaAcum); }} style={{ ...btnPrimary,background:"#d97706" }}>↓ PDF SEMANAL</button>
               <button onClick={()=>{ if(!currentWeekData){alert("Sin datos");return;} generateExcel(currentWeekData,elements,dailyStats,selectedWeek); }} style={{ ...btnPrimary,background:"#16a34a" }}>↓ EXCEL SEMANAL</button>
+              <div style={{ width:1,background:"#cbd5e1",height:32,margin:"0 4px" }}/>
+              <button onClick={()=>generateFullPDF(elements,dailyStats,weeklyStats,programaAcum,obra.nombre)} style={{ ...btnPrimary,background:"#7c3aed" }}>↓ PDF COMPLETO</button>
+              <button onClick={()=>generateFullExcel(elements,dailyStats,weeklyStats,obra.nombre)} style={{ ...btnPrimary,background:"#0891b2" }}>↓ EXCEL COMPLETO</button>
             </div>
             <Panel title="RESUMEN SEMANAL">
               {weeklyStats.length===0&&<div style={{ color:"#94a3b8",fontSize:12 }}>Sin registros.</div>}
