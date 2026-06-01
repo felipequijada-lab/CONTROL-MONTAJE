@@ -46,7 +46,7 @@ const PERSONAL_CARGOS = [
 const defaultPersonal = () => ({ coordinadores: 1, calidad: 1, lideres: 1, montajistas: 2, ayudantes: 2 });
 
 // ── PDF ───────────────────────────────────────────────────────────────────────
-function generatePDF(weekData, elements, dailyStats, weekLabel, obraName) {
+function generatePDF(weekData, elements, dailyStats, weekLabel, obraName, programaAcum) {
   const mdTotal = fmt2(weekData.areaMD);
   const pTotal  = fmt2(weekData.areaP);
   const total   = fmt2(weekData.areaTotal);
@@ -89,6 +89,10 @@ td{padding:6px 10px;font-size:10px;color:#475569;border-bottom:1px solid #f1f5f9
   <div class="kpi"><div class="kpi-label">PRELOSAS</div><div class="kpi-value blue">${pTotal}</div></div>
   <div class="kpi"><div class="kpi-label">DÍAS EFECTIVOS</div><div class="kpi-value amber">${weekData.diasEfectivos}</div></div>
 </div>
+<div class="section"><div class="section-title">CURVA S — AVANCE PROGRAMADO vs REAL</div>
+<div style="padding:12px">
+<canvas id="curvaSCanvas" width="700" height="220" style="width:100%;background:#f8fafc;border-radius:4px"></canvas>
+</div></div>
 <div class="section"><div class="section-title">RENDIMIENTOS</div>
 <table><tr><th>CARGO</th><th>PERSONAS</th><th>m²/PERSONA/DÍA</th><th>m²/PERSONA/SEMANA</th></tr>
 <tr><td class="amber">Líder</td><td>${weekData.personal.lideres}</td><td>${fmt2(weekData.rendLider)}</td><td>${fmt2(weekData.rendLider*weekData.diasEfectivos)}</td></tr>
@@ -109,12 +113,94 @@ ${incidencias.length===0?'<tr><td colspan="2" style="text-align:center;color:#94
 <div class="footer">Informe generado automáticamente · Control de Montaje · Baumax SPA · Semana ${weekLabel}</div>
 </body></html>`;
 
+  // Capture existing Curva S canvas as image
+  const existingCanvas = document.getElementById('curvaSMain');
+  const curvaSImg = existingCanvas ? existingCanvas.toDataURL('image/png') : null;
+
+  // Replace canvas placeholder with img tag if we have it
+  let finalHtml = html;
+  if (curvaSImg) {
+    finalHtml = html.replace(
+      '<canvas id="curvaSCanvas" width="700" height="220" style="width:100%;background:#f8fafc;border-radius:4px"></canvas>',
+      `<img src="${curvaSImg}" style="width:100%;border-radius:4px"/>`
+    );
+  }
+
   const iframe = document.createElement('iframe');
-  iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;opacity:0;';
+  iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:800px;height:600px;border:0;opacity:0;';
   document.body.appendChild(iframe);
   const doc = iframe.contentWindow.document;
-  doc.open(); doc.write(html); doc.close();
-  setTimeout(() => { iframe.contentWindow.focus(); iframe.contentWindow.print(); setTimeout(()=>document.body.removeChild(iframe),1000); }, 500);
+  doc.open(); doc.write(finalHtml); doc.close();
+  setTimeout(() => {
+    // Draw Curva S on canvas inside iframe (fallback if no existing canvas)
+    const canvas = doc.getElementById('curvaSCanvas');
+    if (canvas && programaAcum && programaAcum.length > 0) {
+      const ctx = canvas.getContext('2d');
+      const W=canvas.width, H=canvas.height, padL=55, padR=20, padT=25, padB=40;
+      const cW=W-padL-padR, cH=H-padT-padB;
+      const maxVal = Math.max(...programaAcum.map(d=>d.acum), 100);
+      ctx.fillStyle='#f8fafc'; ctx.fillRect(0,0,W,H);
+      // Grid
+      for(let i=0;i<=4;i++){
+        const y=padT+(cH/4)*i;
+        ctx.strokeStyle='#e2e8f0'; ctx.lineWidth=1;
+        ctx.beginPath(); ctx.moveTo(padL,y); ctx.lineTo(padL+cW,y); ctx.stroke();
+        ctx.fillStyle='#64748b'; ctx.font='10px monospace'; ctx.textAlign='right';
+        ctx.fillText(Math.round(maxVal*(1-i/4)),padL-6,y+4);
+      }
+      // X labels
+      programaAcum.forEach((d,i)=>{
+        const x=padL+(i/(programaAcum.length-1||1))*cW;
+        ctx.fillStyle='#64748b'; ctx.font='9px monospace'; ctx.textAlign='center';
+        ctx.fillText("S"+d.semana.split('.')[0],x,padT+cH+14);
+      });
+      // Programado fill
+      ctx.beginPath();
+      programaAcum.forEach((d,i)=>{
+        const x=padL+(i/(programaAcum.length-1||1))*cW, y=padT+cH*(1-d.acum/maxVal);
+        i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+      });
+      ctx.lineTo(padL+cW,padT+cH); ctx.lineTo(padL,padT+cH); ctx.closePath();
+      ctx.fillStyle='rgba(37,99,235,0.08)'; ctx.fill();
+      // Programado line
+      ctx.strokeStyle='#2563eb'; ctx.lineWidth=2; ctx.setLineDash([5,3]);
+      ctx.beginPath();
+      programaAcum.forEach((d,i)=>{
+        const x=padL+(i/(programaAcum.length-1||1))*cW, y=padT+cH*(1-d.acum/maxVal);
+        i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+      });
+      ctx.stroke(); ctx.setLineDash([]);
+      // Real line
+      const realPts=programaAcum.filter(d=>d.real!==null);
+      if(realPts.length>0){
+        ctx.strokeStyle='#16a34a'; ctx.lineWidth=2.5;
+        ctx.beginPath();
+        realPts.forEach((d,i)=>{
+          const idx=programaAcum.indexOf(d), x=padL+(idx/(programaAcum.length-1||1))*cW, y=padT+cH*(1-d.real/maxVal);
+          i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+        });
+        ctx.stroke();
+        realPts.forEach(d=>{
+          const idx=programaAcum.indexOf(d), x=padL+(idx/(programaAcum.length-1||1))*cW, y=padT+cH*(1-d.real/maxVal);
+          ctx.fillStyle='#16a34a'; ctx.beginPath(); ctx.arc(x,y,5,0,Math.PI*2); ctx.fill();
+          ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(x,y,2.5,0,Math.PI*2); ctx.fill();
+          const dev=d.real-d.acum;
+          ctx.fillStyle=dev>=0?'#16a34a':'#dc2626'; ctx.font='bold 9px monospace'; ctx.textAlign='center';
+          ctx.fillText((dev>=0?"+":"")+Math.round(dev)+" m²",x,y-10);
+        });
+      }
+      // Legend
+      ctx.setLineDash([5,3]); ctx.strokeStyle='#2563eb'; ctx.lineWidth=1.5;
+      ctx.beginPath(); ctx.moveTo(padL,12); ctx.lineTo(padL+25,12); ctx.stroke(); ctx.setLineDash([]);
+      ctx.fillStyle='#2563eb'; ctx.font='10px monospace'; ctx.textAlign='left'; ctx.fillText('Programado',padL+30,16);
+      ctx.strokeStyle='#16a34a'; ctx.lineWidth=1.5;
+      ctx.beginPath(); ctx.moveTo(padL+110,12); ctx.lineTo(padL+135,12); ctx.stroke();
+      ctx.fillStyle='#16a34a'; ctx.fillText('Real',padL+140,16);
+    }
+    iframe.contentWindow.focus();
+    iframe.contentWindow.print();
+    setTimeout(()=>document.body.removeChild(iframe),1000);
+  }, 600);
 }
 
 // ── Excel Export ──────────────────────────────────────────────────────────────
@@ -944,7 +1030,7 @@ function ObraView({ obra, onBack, setError }) {
                   {weeklyStats.length===0&&<option value={getWeekNumber(TODAY)}>{getWeekNumber(TODAY)}</option>}
                 </select>
               </div>
-              <button onClick={()=>{ if(!currentWeekData){alert("Sin datos");return;} generatePDF(currentWeekData,elements,dailyStats,selectedWeek,obra.nombre); }} style={{ ...btnPrimary,background:"#d97706" }}>↓ PDF SEMANAL</button>
+              <button onClick={()=>{ if(!currentWeekData){alert("Sin datos");return;} generatePDF(currentWeekData,elements,dailyStats,selectedWeek,obra.nombre,programaAcum); }} style={{ ...btnPrimary,background:"#d97706" }}>↓ PDF SEMANAL</button>
               <button onClick={()=>{ if(!currentWeekData){alert("Sin datos");return;} generateExcel(currentWeekData,elements,dailyStats,selectedWeek); }} style={{ ...btnPrimary,background:"#16a34a" }}>↓ EXCEL SEMANAL</button>
             </div>
             <Panel title="RESUMEN SEMANAL">
@@ -1055,7 +1141,7 @@ function CurvaS({ data }) {
     ctx.save(); ctx.translate(14,padT+cH/2); ctx.rotate(-Math.PI/2);
     ctx.fillText('m² acumulados',0,0); ctx.restore();
   },[data]);
-  return <canvas ref={canvasRef} width={780} height={320} style={{ width:"100%",maxWidth:780,display:"block",margin:"0 auto" }}/>;
+  return <canvas id="curvaSMain" ref={canvasRef} width={780} height={320} style={{ width:"100%",maxWidth:780,display:"block",margin:"0 auto" }}/>;
 }
 
 // ── Shared ────────────────────────────────────────────────────────────────────
