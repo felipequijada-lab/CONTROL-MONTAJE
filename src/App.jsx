@@ -221,11 +221,15 @@ function generateFullExcel(elements, dailyStats, weeklyStats, obraName) {
 
 // ── Main App ──────────────────────────────────────────────────────────────────
 export default function App() {
-  const [screen, setScreen] = useState("select");
+  const [screen, setScreen] = useState("login");
   const [obras, setObras] = useState([]);
   const [selectedObra, setSelectedObra] = useState(null);
+  const [currentUser, setCurrentUser] = useState(null);
   const [adminPin, setAdminPin] = useState("");
   const [adminError, setAdminError] = useState(false);
+  const [loginMail, setLoginMail] = useState("");
+  const [loginRut, setLoginRut] = useState("");
+  const [loginError, setLoginError] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -238,9 +242,28 @@ export default function App() {
     setLoading(false);
   }
 
+  async function handleUserLogin() {
+    setLoginError("");
+    try {
+      const users = await sbFetch(`usuarios?mail=eq.${encodeURIComponent(loginMail)}&rut=eq.${encodeURIComponent(loginRut)}&select=*`);
+      if(users.length===0){ setLoginError("Mail o RUT incorrecto"); return; }
+      const user = users[0];
+      setCurrentUser({...user, role:"encargado"});
+      const obrasActivas = obras.filter(o=>o.estado!=="cerrada");
+      if(obrasActivas.length===1){ setSelectedObra(obrasActivas[0]); setScreen("obra"); }
+      else setScreen("select");
+    } catch(e){ setLoginError("Error al conectar"); }
+  }
+
   function handleAdminLogin() {
-    if(adminPin===ADMIN_PIN){ setScreen("admin"); setAdminError(false); }
+    if(adminPin===ADMIN_PIN){ setCurrentUser({nombre:"Admin",role:"admin"}); setScreen("admin"); setAdminError(false); }
     else setAdminError(true);
+  }
+
+  function handleLogout() {
+    setCurrentUser(null); setSelectedObra(null);
+    setLoginMail(""); setLoginRut(""); setAdminPin(""); setLoginError("");
+    setScreen("login");
   }
 
   if(loading) return <LoadingScreen/>;
@@ -249,11 +272,46 @@ export default function App() {
     <div style={{ minHeight:"100vh", background:"#e2e8f0", fontFamily:"'DM Mono','Courier New',monospace" }}>
       <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Archivo+Black&display=swap" rel="stylesheet"/>
       {error && <ErrorBar msg={error} onClose={()=>setError(null)}/>}
-      {screen==="select"     && <SelectScreen obras={obras.filter(o=>o.estado!=="cerrada")} onSelectObra={o=>{setSelectedObra(o);setScreen("obra");}} onAdminClick={()=>setScreen("adminLogin")} onRefresh={loadObras}/>}
-      {screen==="adminLogin" && <AdminLogin pin={adminPin} setPin={setAdminPin} error={adminError} onLogin={handleAdminLogin} onBack={()=>{setScreen("select");setAdminPin("");setAdminError(false);}}/>}
-      {screen==="admin"      && <AdminPanel obras={obras} onBack={()=>setScreen("select")} onObraCreated={loadObras} setError={setError} onViewObra={o=>{setSelectedObra(o);setScreen("obraAdmin");}}/>}
-      {screen==="obra"       && selectedObra && <ObraView obra={selectedObra} onBack={()=>setScreen("select")} setError={setError} isAdmin={false}/>}
-      {screen==="obraAdmin"  && selectedObra && <ObraView obra={selectedObra} onBack={()=>setScreen("admin")} setError={setError} isAdmin={true} onObraUpdated={loadObras}/>}
+      {screen==="login"      && <LoginScreen loginMail={loginMail} setLoginMail={setLoginMail} loginRut={loginRut} setLoginRut={setLoginRut} loginError={loginError} onLogin={handleUserLogin} adminPin={adminPin} setAdminPin={setAdminPin} adminError={adminError} onAdminLogin={handleAdminLogin}/>}
+      {screen==="select"     && <SelectScreen obras={obras.filter(o=>o.estado!=="cerrada")} currentUser={currentUser} onSelectObra={o=>{setSelectedObra(o);setScreen("obra");}} onLogout={handleLogout} onRefresh={loadObras}/>}
+      {screen==="admin"      && <AdminPanel obras={obras} onBack={handleLogout} onObraCreated={loadObras} setError={setError} onViewObra={o=>{setSelectedObra(o);setScreen("obraAdmin");}}/>}
+      {screen==="obra"       && selectedObra && <ObraView obra={selectedObra} onBack={()=>{currentUser?.role==="admin"?setScreen("admin"):setScreen("select");}} setError={setError} isAdmin={false} currentUser={currentUser}/>}
+      {screen==="obraAdmin"  && selectedObra && <ObraView obra={selectedObra} onBack={()=>setScreen("admin")} setError={setError} isAdmin={true} currentUser={currentUser} onObraUpdated={loadObras}/>}
+    </div>
+  );
+}
+
+
+// ── Login Screen ──────────────────────────────────────────────────────────────
+function LoginScreen({ loginMail, setLoginMail, loginRut, setLoginRut, loginError, onLogin, adminPin, setAdminPin, adminError, onAdminLogin }) {
+  const [mode, setMode] = useState("encargado");
+  return (
+    <div style={{ minHeight:"100vh", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:24 }}>
+      <div style={{ fontFamily:"'Archivo Black',sans-serif", fontSize:24, color:"#d97706", marginBottom:4 }}>◈ CONTROL DE MONTAJE</div>
+      <div style={{ fontSize:10, color:"#94a3b8", letterSpacing:3, marginBottom:32 }}>BAUMAX SPA</div>
+      <div style={{ background:"#f8fafc", border:"1px solid #cbd5e1", borderRadius:12, padding:28, width:"100%", maxWidth:400 }}>
+        <div style={{ display:"flex", marginBottom:20, borderBottom:"1px solid #e2e8f0" }}>
+          <button onClick={()=>setMode("encargado")} style={{ flex:1,padding:"10px",background:"none",border:"none",cursor:"pointer",color:mode==="encargado"?"#d97706":"#64748b",borderBottom:mode==="encargado"?"2px solid #d97706":"2px solid transparent",fontFamily:"'DM Mono',monospace",fontSize:11 }}>ENCARGADO</button>
+          <button onClick={()=>setMode("admin")} style={{ flex:1,padding:"10px",background:"none",border:"none",cursor:"pointer",color:mode==="admin"?"#d97706":"#64748b",borderBottom:mode==="admin"?"2px solid #d97706":"2px solid transparent",fontFamily:"'DM Mono',monospace",fontSize:11 }}>ADMINISTRADOR</button>
+        </div>
+        {mode==="encargado" ? (
+          <div>
+            <Label>Correo electrónico</Label>
+            <input type="email" value={loginMail} onChange={e=>setLoginMail(e.target.value)} placeholder="nombre@empresa.cl" style={inp}/>
+            <Label>RUT (sin puntos, con guión)</Label>
+            <input value={loginRut} onChange={e=>setLoginRut(e.target.value)} onKeyDown={e=>e.key==="Enter"&&onLogin()} placeholder="12345678-9" style={inp}/>
+            {loginError&&<div style={{ color:"#dc2626",fontSize:11,marginTop:8,textAlign:"center" }}>{loginError}</div>}
+            <button onClick={onLogin} style={{ ...btnPrimary,width:"100%",marginTop:16,padding:"11px" }}>Ingresar →</button>
+          </div>
+        ) : (
+          <div>
+            <Label>PIN de administrador</Label>
+            <input type="password" inputMode="numeric" value={adminPin} onChange={e=>setAdminPin(e.target.value)} onKeyDown={e=>e.key==="Enter"&&onAdminLogin()} placeholder="PIN numérico" style={{ ...inp,fontSize:18,letterSpacing:4,textAlign:"center" }}/>
+            {adminError&&<div style={{ color:"#dc2626",fontSize:11,marginTop:8,textAlign:"center" }}>PIN incorrecto</div>}
+            <button onClick={onAdminLogin} style={{ ...btnPrimary,width:"100%",marginTop:16,padding:"11px" }}>Ingresar →</button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -308,6 +366,9 @@ function AdminLogin({ pin, setPin, error, onLogin, onBack }) {
 function AdminPanel({ obras, onBack, onObraCreated, setError, onViewObra }) {
   const [tab, setTab] = useState("resumen");
   const [newObra, setNewObra] = useState({ nombre:"", ubicacion:"", fecha_inicio:TODAY });
+  const [pendingRegs, setPendingRegs] = useState([]);
+  const [usuarios, setUsuarios] = useState([]);
+  const [newUser, setNewUser] = useState({ nombre:"", mail:"", rut:"" });
   const [creando, setCreando] = useState(false);
   const [obraId, setObraId] = useState(obras.filter(o=>o.estado!=="cerrada")[0]?.id||"");
   const [uploadStatus, setUploadStatus] = useState("");
@@ -321,7 +382,57 @@ function AdminPanel({ obras, onBack, onObraCreated, setError, onViewObra }) {
   const obrasActivas = obras.filter(o=>o.estado!=="cerrada");
   const obrasCerradas = obras.filter(o=>o.estado==="cerrada");
 
-  useEffect(()=>{ if(tab==="resumen") loadAdminStats(); },[tab,obras]);
+  useEffect(()=>{
+    if(tab==="resumen") loadAdminStats();
+    if(tab==="aprobacion") loadPendingRegs();
+    if(tab==="usuarios") loadUsuarios();
+  },[tab,obras]);
+
+  async function loadPendingRegs() {
+    try {
+      const regs = await sbFetch("registros?aprobado=eq.false&select=*&order=fecha.asc");
+      const map={};
+      regs.forEach(r=>{
+        const key=`${r.obra_id}||${r.fecha}`;
+        if(!map[key]) map[key]={obra_id:r.obra_id,fecha:r.fecha,registros:[],ids:[]};
+        map[key].registros.push(r); map[key].ids.push(r.id);
+      });
+      const grouped=Object.values(map);
+      grouped.forEach(g=>{ g.obraNombre=obras.find(o=>String(o.id)===String(g.obra_id))?.nombre||g.obra_id; });
+      setPendingRegs(grouped);
+    } catch(e){ setError("Error: "+e.message); }
+  }
+
+  async function loadUsuarios() {
+    try { const data=await sbFetch("usuarios?select=*"); setUsuarios(data); }
+    catch(e){ setError("Error: "+e.message); }
+  }
+
+  async function aprobarDia(group) {
+    try {
+      for(const id of group.ids)
+        await sbFetch(`registros?id=eq.${id}`,{method:"PATCH",body:JSON.stringify({aprobado:true}),headers:{"Prefer":"return=minimal"}});
+      loadPendingRegs(); loadAdminStats();
+    } catch(e){ setError("Error: "+e.message); }
+  }
+
+  async function rechazarDia(group) {
+    if(!window.confirm(`¿Rechazar el registro del ${group.fecha} en ${group.obraNombre}? Los elementos volverán a Pendiente.`)) return;
+    try {
+      for(const id of group.ids)
+        await sbFetch(`registros?id=eq.${id}`,{method:"DELETE",headers:{"Prefer":"return=minimal"}});
+      loadPendingRegs();
+    } catch(e){ setError("Error: "+e.message); }
+  }
+
+  async function crearUsuario() {
+    if(!newUser.nombre||!newUser.mail||!newUser.rut) return;
+    try {
+      await sbFetch("usuarios",{method:"POST",body:JSON.stringify({nombre:newUser.nombre,mail:newUser.mail,rut:newUser.rut})});
+      setNewUser({nombre:"",mail:"",rut:""});
+      loadUsuarios();
+    } catch(e){ setError("Error: "+e.message); }
+  }
 
   async function loadAdminStats() {
     setLoadingStats(true);
@@ -422,7 +533,7 @@ function AdminPanel({ obras, onBack, onObraCreated, setError, onViewObra }) {
         <div style={{ fontFamily:"'Archivo Black',sans-serif", fontSize:18, color:"#d97706" }}>⚙ PANEL ADMINISTRADOR</div>
       </div>
       <div style={{ display:"flex", background:"#f8fafc", borderBottom:"1px solid #cbd5e1", padding:"0 28px" }}>
-        {[["resumen","Dashboard"],["obras","Obras"],["elementos","Cargar Elementos"],["programa","Programa"],["historico","Histórico"]].map(([k,l])=>(
+        {[["resumen","Dashboard"],["aprobacion","Aprobaciones"],["obras","Obras"],["usuarios","Usuarios"],["elementos","Elementos"],["programa","Programa"],["historico","Histórico"]].map(([k,l])=>(
           <button key={k} onClick={()=>setTab(k)} style={{ background:"none",border:"none",cursor:"pointer",padding:"12px 16px",color:tab===k?"#d97706":"#64748b",borderBottom:tab===k?"2px solid #d97706":"2px solid transparent",fontFamily:"'DM Mono',monospace",fontSize:11 }}>{l}</button>
         ))}
       </div>
@@ -575,6 +686,69 @@ function AdminPanel({ obras, onBack, onObraCreated, setError, onViewObra }) {
           </Panel>
         )}
 
+        {/* ── APROBACIONES ── */}
+        {tab==="aprobacion" && (
+          <Panel title="REGISTROS PENDIENTES DE APROBACIÓN">
+            {pendingRegs.length===0&&<div style={{ color:"#94a3b8",fontSize:12,textAlign:"center",padding:20 }}>✓ No hay registros pendientes.</div>}
+            {pendingRegs.map((group,gi)=>{
+              const totalM=group.registros.reduce((s,r)=>s+(r.elementos_montados?r.elementos_montados.split(",").filter(Boolean).length:0),0);
+              const totalR=group.registros.reduce((s,r)=>s+(r.elementos_recibidos?r.elementos_recibidos.split(",").filter(Boolean).length:0),0);
+              const totalM2md=group.registros.reduce((s,r)=>s+(r.m2_md||0),0);
+              const totalM2p=group.registros.reduce((s,r)=>s+(r.m2_p||0),0);
+              return (
+                <div key={gi} style={{ border:"1px solid #cbd5e1",borderRadius:8,marginBottom:16,overflow:"hidden" }}>
+                  <div style={{ background:"#f1f5f9",padding:"12px 16px",display:"flex",justifyContent:"space-between",alignItems:"center" }}>
+                    <div>
+                      <span style={{ fontWeight:"bold",color:"#1e293b",fontSize:13 }}>{group.obraNombre}</span>
+                      <span style={{ color:"#94a3b8",fontSize:11,marginLeft:12 }}>{group.fecha} · Semana {getWeekNumber(group.fecha)}</span>
+                    </div>
+                    <div style={{ display:"flex",gap:8 }}>
+                      <button onClick={()=>aprobarDia(group)} style={{ background:"#dcfce7",color:"#16a34a",border:"1px solid #16a34a44",borderRadius:6,padding:"6px 14px",cursor:"pointer",fontFamily:"'DM Mono',monospace",fontSize:11,fontWeight:"bold" }}>✓ Aprobar</button>
+                      <button onClick={()=>rechazarDia(group)} style={{ background:"#fee2e2",color:"#dc2626",border:"1px solid #dc262644",borderRadius:6,padding:"6px 14px",cursor:"pointer",fontFamily:"'DM Mono',monospace",fontSize:11 }}>✕ Rechazar</button>
+                    </div>
+                  </div>
+                  <div style={{ padding:"12px 16px",display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12 }}>
+                    <MiniStat label="Recibidos" value={totalR} color="#2563eb" small/>
+                    <MiniStat label="Montados" value={totalM} color="#16a34a" small/>
+                    <MiniStat label="m² MD/MDT" value={fmt2(totalM2md)} color="#16a34a" small/>
+                    <MiniStat label="m² P" value={fmt2(totalM2p)} color="#2563eb" small/>
+                  </div>
+                  {group.registros.some(r=>r.incidencias)&&(
+                    <div style={{ padding:"8px 16px",borderTop:"1px solid #f1f5f9",fontSize:11,color:"#64748b",fontStyle:"italic" }}>
+                      "{group.registros.find(r=>r.incidencias)?.incidencias}"
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </Panel>
+        )}
+
+        {/* ── USUARIOS ── */}
+        {tab==="usuarios" && (
+          <div>
+            <Panel title="CREAR USUARIO">
+              <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12 }}>
+                <div><Label>Nombre</Label><input value={newUser.nombre} onChange={e=>setNewUser(p=>({...p,nombre:e.target.value}))} placeholder="Juan Pérez" style={inp}/></div>
+                <div><Label>Mail</Label><input type="email" value={newUser.mail} onChange={e=>setNewUser(p=>({...p,mail:e.target.value}))} placeholder="juan@empresa.cl" style={inp}/></div>
+                <div><Label>RUT (sin puntos, con guión)</Label><input value={newUser.rut} onChange={e=>setNewUser(p=>({...p,rut:e.target.value}))} placeholder="12345678-9" style={inp}/></div>
+              </div>
+              <button onClick={crearUsuario} disabled={!newUser.nombre||!newUser.mail||!newUser.rut} style={{ ...btnPrimary,marginTop:12 }}>+ Crear Usuario</button>
+            </Panel>
+            <Panel title="USUARIOS REGISTRADOS">
+              {usuarios.length===0&&<div style={{ color:"#94a3b8",fontSize:12 }}>No hay usuarios registrados.</div>}
+              {usuarios.map(u=>(
+                <div key={u.id} style={{ padding:"12px 0",borderBottom:"1px solid #f1f5f9",display:"flex",justifyContent:"space-between",alignItems:"center" }}>
+                  <div>
+                    <div style={{ color:"#1e293b",fontWeight:"bold" }}>{u.nombre}</div>
+                    <div style={{ color:"#94a3b8",fontSize:10 }}>{u.mail} · RUT: {u.rut}</div>
+                  </div>
+                </div>
+              ))}
+            </Panel>
+          </div>
+        )}
+
         {/* ── HISTÓRICO ── */}
         {tab==="historico" && (
           <Panel title="OBRAS CERRADAS — ARCHIVO HISTÓRICO">
@@ -641,7 +815,7 @@ function ObraView({ obra, onBack, setError, isAdmin, onObraUpdated }) {
       regData.forEach(row=>{
         const montados=(row.elementos_montados||"").split(",").map(p=>p.trim()).filter(Boolean);
         const recibidos=(row.elementos_recibidos||"").split(",").map(p=>p.trim()).filter(Boolean);
-        expanded.push({date:row.fecha,montados,recibidos,personal:{coordinadores:row.coordinadores||0,calidad:row.calidad||0,lideres:row.lideres||0,montajistas:row.montajistas||0,ayudantes:row.ayudantes||0},note:row.incidencias||""});
+        expanded.push({date:row.fecha,montados,recibidos,aprobado:row.aprobado===true,personal:{coordinadores:row.coordinadores||0,calidad:row.calidad||0,lideres:row.lideres||0,montajistas:row.montajistas||0,ayudantes:row.ayudantes||0},note:row.incidencias||""});
       });
       setLogs(expanded);
       setPrograma(progData);
@@ -649,12 +823,14 @@ function ObraView({ obra, onBack, setError, isAdmin, onObraUpdated }) {
     setLoading(false);
   }
 
-  const montadosPos  = useMemo(()=>new Set(logs.flatMap(l=>l.montados)),[logs]);
-  const recibidosPos = useMemo(()=>new Set(logs.flatMap(l=>l.recibidos)),[logs]);
+  const montadosPos     = useMemo(()=>new Set(logs.filter(l=>l.aprobado).flatMap(l=>l.montados)),[logs]);
+  const recibidosPos    = useMemo(()=>new Set(logs.filter(l=>l.aprobado).flatMap(l=>l.recibidos)),[logs]);
+  const montadosPending = useMemo(()=>new Set(logs.filter(l=>!l.aprobado).flatMap(l=>l.montados)),[logs]);
+  const recibidosPending= useMemo(()=>new Set(logs.filter(l=>!l.aprobado).flatMap(l=>l.recibidos)),[logs]);
 
   function getEstado(pos) {
-    if(montadosPos.has(pos)) return "montado";
-    if(recibidosPos.has(pos)) return "recibido";
+    if(montadosPos.has(pos)||montadosPending.has(pos)) return "montado";
+    if(recibidosPos.has(pos)||recibidosPending.has(pos)) return "recibido";
     return "pendiente";
   }
 
@@ -702,7 +878,8 @@ function ObraView({ obra, onBack, setError, isAdmin, onObraUpdated }) {
         coordinadores:personal.coordinadores,calidad:personal.calidad,lideres:personal.lideres,montajistas:personal.montajistas,ayudantes:personal.ayudantes,
         m2_md:mdEls.reduce((s,e)=>s+e.area,0),m2_p:pEls.reduce((s,e)=>s+e.area,0),
         elementos_montados:toMount.join(","),elementos_recibidos:toReceive.join(","),
-        incidencias:note,registrado_por:"encargado",
+        incidencias:note,registrado_por:currentUser?.nombre||"encargado",
+        aprobado:false,
       })});
       setLogs(prev=>[...prev,{date:selectedDate,montados:toMount,recibidos:toReceive,personal:{...personal},note}]);
       setElementActions({});
@@ -741,7 +918,8 @@ function ObraView({ obra, onBack, setError, isAdmin, onObraUpdated }) {
   const dailyStats = useMemo(()=>{
     const map={};
     logs.forEach(l=>{
-      if(!map[l.date]) map[l.date]={date:l.date,montados:[],recibidos:[],personal:l.personal,note:l.note};
+      if(!map[l.date]) map[l.date]={date:l.date,montados:[],recibidos:[],aprobado:true,personal:l.personal,note:l.note};
+      if(!l.aprobado) map[l.date].aprobado=false;
       map[l.date].montados.push(...l.montados);
       map[l.date].recibidos.push(...l.recibidos);
       map[l.date].note=l.note||map[l.date].note;
@@ -762,7 +940,7 @@ function ObraView({ obra, onBack, setError, isAdmin, onObraUpdated }) {
 
   const weeklyStats = useMemo(()=>{
     const map={};
-    dailyStats.forEach(d=>{
+    dailyStats.filter(d=>d.aprobado).forEach(d=>{
       const week=getWeekNumber(d.date);
       if(!map[week]) map[week]={week,days:[],montados:[],recibidos:[]};
       map[week].days.push(d);
@@ -1103,7 +1281,10 @@ function ObraView({ obra, onBack, setError, isAdmin, onObraUpdated }) {
                 <div key={d.date} style={{ padding:"12px 0",borderBottom:"1px solid #f1f5f9" }}>
                   <div style={{ display:"flex",justifyContent:"space-between",marginBottom:6 }}>
                     <span style={{ color:"#d97706",fontSize:12,fontWeight:"bold" }}>{d.date}</span>
-                    <span style={{ color:"#94a3b8",fontSize:10 }}>Sem. {getWeekNumber(d.date)}</span>
+                    <div style={{ display:"flex",gap:6,alignItems:"center" }}>
+                      <span style={{ color:"#94a3b8",fontSize:10 }}>Sem. {getWeekNumber(d.date)}</span>
+                      <span style={{ fontSize:9,padding:"1px 6px",borderRadius:8,background:d.aprobado?"#dcfce7":"#fef9c3",color:d.aprobado?"#16a34a":"#d97706" }}>{d.aprobado?"✓":"⏳"}</span>
+                    </div>
                   </div>
                   <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6,marginBottom:8 }}>
                     <MiniStat label="m² Recibidos" value={fmt2(d.areaRecibida)} color="#2563eb" small/>
