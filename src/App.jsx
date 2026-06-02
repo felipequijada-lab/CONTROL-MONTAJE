@@ -369,6 +369,7 @@ function AdminPanel({ obras, onBack, onObraCreated, setError, onViewObra }) {
   const [pendingRegs, setPendingRegs] = useState([]);
   const [usuarios, setUsuarios] = useState([]);
   const [newUser, setNewUser] = useState({ nombre:"", mail:"", rut:"" });
+  const [editingUser, setEditingUser] = useState(null);
   const [creando, setCreando] = useState(false);
   const [obraId, setObraId] = useState(obras.filter(o=>o.estado!=="cerrada")[0]?.id||"");
   const [uploadStatus, setUploadStatus] = useState("");
@@ -430,6 +431,22 @@ function AdminPanel({ obras, onBack, onObraCreated, setError, onViewObra }) {
     try {
       await sbFetch("usuarios",{method:"POST",body:JSON.stringify({nombre:newUser.nombre,mail:newUser.mail,rut:newUser.rut})});
       setNewUser({nombre:"",mail:"",rut:""});
+      loadUsuarios();
+    } catch(e){ setError("Error: "+e.message); }
+  }
+
+  async function guardarUsuario(u) {
+    try {
+      await sbFetch(`usuarios?id=eq.${u.id}`,{method:"PATCH",body:JSON.stringify({nombre:u._nombre||u.nombre,mail:u._mail||u.mail,rut:u._rut||u.rut}),headers:{"Prefer":"return=minimal"}});
+      setEditingUser(null);
+      loadUsuarios();
+    } catch(e){ setError("Error: "+e.message); }
+  }
+
+  async function eliminarUsuario(id) {
+    if(!window.confirm("¿Eliminar este usuario?")) return;
+    try {
+      await sbFetch(`usuarios?id=eq.${id}`,{method:"DELETE",headers:{"Prefer":"return=minimal"}});
       loadUsuarios();
     } catch(e){ setError("Error: "+e.message); }
   }
@@ -738,13 +755,37 @@ function AdminPanel({ obras, onBack, onObraCreated, setError, onViewObra }) {
             <Panel title="USUARIOS REGISTRADOS">
               {usuarios.length===0&&<div style={{ color:"#94a3b8",fontSize:12 }}>No hay usuarios registrados.</div>}
               {usuarios.map(u=>(
-                <div key={u.id} style={{ padding:"12px 0",borderBottom:"1px solid #f1f5f9",display:"flex",justifyContent:"space-between",alignItems:"center" }}>
-                  <div>
-                    <div style={{ color:"#1e293b",fontWeight:"bold" }}>{u.nombre}</div>
-                    <div style={{ color:"#94a3b8",fontSize:10 }}>{u.mail} · RUT: {u.rut}</div>
-                  </div>
+                <div key={u.id} style={{ padding:"12px 0",borderBottom:"1px solid #f1f5f9" }}>
+                  {editingUser===u.id ? (
+                    <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr 1fr auto",gap:8,alignItems:"flex-end" }}>
+                      <div><Label>Nombre</Label><input defaultValue={u.nombre} onChange={e=>u._nombre=e.target.value} style={inp}/></div>
+                      <div><Label>Mail</Label><input defaultValue={u.mail} onChange={e=>u._mail=e.target.value} style={inp}/></div>
+                      <div><Label>RUT</Label><input defaultValue={u.rut} onChange={e=>u._rut=e.target.value} style={inp}/></div>
+                      <div style={{ display:"flex",gap:6,paddingBottom:2 }}>
+                        <button onClick={()=>guardarUsuario(u)} style={{ background:"#dcfce7",color:"#16a34a",border:"none",borderRadius:6,padding:"8px 12px",cursor:"pointer",fontSize:11 }}>✓</button>
+                        <button onClick={()=>setEditingUser(null)} style={{ background:"#f1f5f9",color:"#64748b",border:"none",borderRadius:6,padding:"8px 12px",cursor:"pointer",fontSize:11 }}>✕</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center" }}>
+                      <div>
+                        <div style={{ color:"#1e293b",fontWeight:"bold" }}>{u.nombre}</div>
+                        <div style={{ color:"#94a3b8",fontSize:10 }}>{u.mail} · RUT: {u.rut}</div>
+                      </div>
+                      <div style={{ display:"flex",gap:6 }}>
+                        <button onClick={()=>{ u._nombre=u.nombre; u._mail=u.mail; u._rut=u.rut; setEditingUser(u.id); }} style={{ background:"#fef3c7",color:"#d97706",border:"none",borderRadius:6,padding:"6px 12px",cursor:"pointer",fontFamily:"'DM Mono',monospace",fontSize:10 }}>✏ Editar</button>
+                        <button onClick={()=>eliminarUsuario(u.id)} style={{ background:"#fee2e2",color:"#dc2626",border:"none",borderRadius:6,padding:"6px 12px",cursor:"pointer",fontFamily:"'DM Mono',monospace",fontSize:10 }}>✕</button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
+            </Panel>
+            <Panel title="ADMINISTRADORES">
+              <div style={{ fontSize:11,color:"#64748b",marginBottom:12 }}>Los administradores acceden con PIN. PIN actual: <span style={{ color:"#d97706",fontWeight:"bold" }}>configurado en el código</span></div>
+              <div style={{ background:"#fef9c3",border:"1px solid #fde68a",borderRadius:6,padding:10,fontSize:11,color:"#92400e" }}>
+                Para cambiar el PIN de administrador, editá la constante <b>ADMIN_PIN</b> en el archivo App.jsx y hacé deploy.
+              </div>
             </Panel>
           </div>
         )}
@@ -773,7 +814,7 @@ function AdminPanel({ obras, onBack, onObraCreated, setError, onViewObra }) {
 }
 
 // ── Obra View ─────────────────────────────────────────────────────────────────
-function ObraView({ obra, onBack, setError, isAdmin, onObraUpdated }) {
+function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated }) {
   const [elements, setElements] = useState([]);
   const [logs, setLogs] = useState([]);
   const [programa, setPrograma] = useState([]);
