@@ -1200,10 +1200,11 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
                   </thead>
                   <tbody key={`${filterTorre}-${filterTipo}-${filterPiso}-${filterLote}-${filterEstado}-${filterSearch}`}>
                     {filteredElements.map(el=>{
-                      const estado = getEstado(el.pos);
+                      const const elKey = `${el.pos}__${el.tipo}`;
+                      const estado = getEstado(elKey);
                       const isMounted  = estado==="montado";
                       const isReceived = estado==="recibido";
-                      const action = elementActions[el.pos]||null;
+                      const action = elementActions[elKey]||null;
                       const selR = action==="recibido"||action==="ambos";
                       const selM = action==="montado"||action==="ambos";
                       const tc = TIPOS_MD.includes(el.tipo)?"#16a34a":"#2563eb";
