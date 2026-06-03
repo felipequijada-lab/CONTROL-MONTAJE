@@ -527,9 +527,14 @@ function AdminPanel({ obras, onBack, onObraCreated, setError, onViewObra }) {
           elementos.push({ obra_id:obraId, lote:String(row[0]||"").trim(), torre:String(row[1]||"").trim(), piso:String(row[2]||"").trim(), tipo, pos, area, estado:"pendiente" });
         });
       });
-      for(let i=0;i<elementos.length;i+=50)
-        await sbFetch("elementos",{method:"POST",body:JSON.stringify(elementos.slice(i,i+50)),headers:{"Prefer":"return=minimal"}});
-      setUploadStatus(`✓ ${elementos.length} elementos cargados`);
+      let uploaded = 0;
+      for(let i=0;i<elementos.length;i+=100){
+        const batch = elementos.slice(i,i+100);
+        await sbFetch("elementos",{method:"POST",body:JSON.stringify(batch),headers:{"Prefer":"return=minimal"}});
+        uploaded += batch.length;
+        setUploadStatus(`Cargando... ${uploaded}/${elementos.length}`);
+      }
+      setUploadStatus(`✓ ${elementos.length} elementos cargados correctamente`);
     } catch(e){ setUploadStatus("Error: "+e.message); }
     e.target.value="";
   }
@@ -847,7 +852,17 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
     setLoading(true);
     try {
       const [elemData,regData,progData] = await Promise.all([
-        sbFetch(`elementos?obra_id=eq.${obra.id}&select=*`),
+        (async () => {
+          const all = [];
+          let offset = 0;
+          while(true) {
+            const batch = await sbFetch(`elementos?obra_id=eq.${obra.id}&select=*&limit=1000&offset=${offset}`);
+            all.push(...batch);
+            if(batch.length < 1000) break;
+            offset += 1000;
+          }
+          return all;
+        })(),
         sbFetch(`registros?obra_id=eq.${obra.id}&select=*&order=fecha.asc`),
         sbFetch(`programa?obra_id=eq.${obra.id}&select=*&order=semana.asc`),
       ]);
