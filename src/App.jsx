@@ -459,8 +459,9 @@ function AdminPanel({ obras, onBack, onObraCreated, setError, onViewObra }) {
           sbFetch(`elementos?obra_id=eq.${o.id}&select=pos,area`),
           sbFetch(`registros?obra_id=eq.${o.id}&select=fecha,elementos_montados,elementos_recibidos`),
         ]);
-        const montadosPos = new Set(regs.flatMap(r=>r.elementos_montados?r.elementos_montados.split(",").map(p=>p.trim()).filter(Boolean):[]));
-        const recibidosPos = new Set(regs.flatMap(r=>r.elementos_recibidos?r.elementos_recibidos.split(",").map(p=>p.trim()).filter(Boolean):[]));
+        const aprobados = regs.filter(r=>r.aprobado);
+        const montadosPos = new Set(aprobados.flatMap(r=>r.elementos_montados?r.elementos_montados.split(",").map(p=>p.trim()).filter(Boolean):[]));
+        const recibidosPos = new Set(aprobados.flatMap(r=>r.elementos_recibidos?r.elementos_recibidos.split(",").map(p=>p.trim()).filter(Boolean):[]));
         const totalArea = elems.reduce((s,e)=>s+e.area,0);
         const mountedArea = elems.filter(e=>isMontado(e)).reduce((s,e)=>s+e.area,0);
         const receivedArea = elems.filter(e=>isRecibido(e)||isMontado(e)).reduce((s,e)=>s+e.area,0);
