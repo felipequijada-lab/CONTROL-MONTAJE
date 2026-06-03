@@ -462,8 +462,8 @@ function AdminPanel({ obras, onBack, onObraCreated, setError, onViewObra }) {
         const montadosPos = new Set(regs.flatMap(r=>r.elementos_montados?r.elementos_montados.split(",").map(p=>p.trim()).filter(Boolean):[]));
         const recibidosPos = new Set(regs.flatMap(r=>r.elementos_recibidos?r.elementos_recibidos.split(",").map(p=>p.trim()).filter(Boolean):[]));
         const totalArea = elems.reduce((s,e)=>s+e.area,0);
-        const mountedArea = elems.filter(e=>montadosPos.has(e.pos)).reduce((s,e)=>s+e.area,0);
-        const receivedArea = elems.filter(e=>recibidosPos.has(e.pos)||montadosPos.has(e.pos)).reduce((s,e)=>s+e.area,0);
+        const mountedArea = elems.filter(e=>isMontado(e)).reduce((s,e)=>s+e.area,0);
+        const receivedArea = elems.filter(e=>isRecibido(e)||isMontado(e)).reduce((s,e)=>s+e.area,0);
 
         // Weekly breakdown
         const weekMap = {};
@@ -869,9 +869,11 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
       setElements(elemData.map(e=>({pos:e.pos,lote:e.lote||"",torre:e.torre||"",piso:e.piso||"",tipo:e.tipo,area:e.area||0,estado:e.estado||"pendiente",id:e.id})));
       const expanded=[];
       regData.forEach(row=>{
-        const montados=(row.elementos_montados||"").split(",").map(p=>p.trim()).filter(Boolean);
-        const recibidos=(row.elementos_recibidos||"").split(",").map(p=>p.trim()).filter(Boolean);
-        expanded.push({date:row.fecha,montados,recibidos,aprobado:row.aprobado===true,personal:{coordinadores:row.coordinadores||0,calidad:row.calidad||0,lideres:row.lideres||0,montajistas:row.montajistas||0,ayudantes:row.ayudantes||0},note:row.incidencias||""});
+        // Keys may be "pos__tipo" (new format) or just "pos" (old format)
+        // For old format, try to find the element and reconstruct the key
+        const rawMontados=(row.elementos_montados||"").split(",").map(p=>p.trim()).filter(Boolean);
+        const rawRecibidos=(row.elementos_recibidos||"").split(",").map(p=>p.trim()).filter(Boolean);
+        expanded.push({date:row.fecha,montados:rawMontados,recibidos:rawRecibidos,aprobado:row.aprobado===true,personal:{coordinadores:row.coordinadores||0,calidad:row.calidad||0,lideres:row.lideres||0,montajistas:row.montajistas||0,ayudantes:row.ayudantes||0},note:row.incidencias||""});
       });
       setLogs(expanded);
       setPrograma(progData);
@@ -879,14 +881,29 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
     setLoading(false);
   }
 
+  // Keys stored as "pos__tipo" to avoid collision between MD/P with same number
   const montadosPos     = useMemo(()=>new Set(logs.filter(l=>l.aprobado).flatMap(l=>l.montados)),[logs]);
   const recibidosPos    = useMemo(()=>new Set(logs.filter(l=>l.aprobado).flatMap(l=>l.recibidos)),[logs]);
   const montadosPending = useMemo(()=>new Set(logs.filter(l=>!l.aprobado).flatMap(l=>l.montados)),[logs]);
   const recibidosPending= useMemo(()=>new Set(logs.filter(l=>!l.aprobado).flatMap(l=>l.recibidos)),[logs]);
+  // Helper to check by element object
+  const isMontado  = (el) => { const k=`${el.pos}__${el.tipo}`; return montadosPos.has(k)||montadosPending.has(k); };
+  const isRecibido = (el) => { const k=`${el.pos}__${el.tipo}`; return recibidosPos.has(k)||recibidosPending.has(k); };
+  const isPendingM = (el) => { const k=`${el.pos}__${el.tipo}`; return montadosPending.has(k); };
+  const isPendingR = (el) => { const k=`${el.pos}__${el.tipo}`; return recibidosPending.has(k); };
 
-  function getEstado(pos) {
-    if(montadosPos.has(pos)||montadosPending.has(pos)) return "montado";
-    if(recibidosPos.has(pos)||recibidosPending.has(pos)) return "recibido";
+  // Use pos as stored — but elements table has unique ids, use id as key
+  // Key = obra_id + pos + tipo to avoid collision between MD and P with same number
+  function elKey(el) { return `${el.pos}__${el.tipo}`; }
+  function posKey(pos, elements) {
+    // Find element to get its tipo for the key
+    const el = elements.find(e=>e.pos===pos);
+    return el ? `${pos}__${el.tipo}` : pos;
+  }
+
+  function getEstado(key) {
+    if(montadosPos.has(key)||montadosPending.has(key)) return "montado";
+    if(recibidosPos.has(key)||recibidosPending.has(key)) return "recibido";
     return "pendiente";
   }
 
@@ -922,13 +939,15 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
   }
 
   async function registrar() {
-    const toReceive = Object.entries(elementActions).filter(([pos,action])=>(action==="recibido"||action==="ambos")&&!recibidosPos.has(pos)&&!montadosPos.has(pos)).map(([pos])=>pos);
-    const toMount   = Object.entries(elementActions).filter(([pos,action])=>(action==="montado"||action==="ambos")&&!montadosPos.has(pos)).map(([pos])=>pos);
+    // Keys are pos__tipo to avoid collision between MD/P with same number
+    const toReceive = Object.entries(elementActions).filter(([key,action])=>(action==="recibido"||action==="ambos")&&!recibidosPos.has(key)&&!montadosPos.has(key)&&!recibidosPending.has(key)&&!montadosPending.has(key)).map(([key])=>key);
+    const toMount   = Object.entries(elementActions).filter(([key,action])=>(action==="montado"||action==="ambos")&&!montadosPos.has(key)&&!montadosPending.has(key)).map(([key])=>key);
     if(toReceive.length===0&&toMount.length===0) return;
     setSaving(true);
     try {
-      const mdEls = elements.filter(e=>toMount.includes(e.pos)&&TIPOS_MD.includes(e.tipo));
-      const pEls  = elements.filter(e=>toMount.includes(e.pos)&&e.tipo==="P");
+      // toMount/toReceive contain pos__tipo keys
+      const mdEls = elements.filter(e=>toMount.includes(`${e.pos}__${e.tipo}`)&&TIPOS_MD.includes(e.tipo));
+      const pEls  = elements.filter(e=>toMount.includes(`${e.pos}__${e.tipo}`)&&e.tipo==="P");
       await sbFetch("registros",{method:"POST",body:JSON.stringify({
         fecha:selectedDate,obra_id:obra.id,
         coordinadores:personal.coordinadores,calidad:personal.calidad,lideres:personal.lideres,montajistas:personal.montajistas,ayudantes:personal.ayudantes,
@@ -937,27 +956,37 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
         incidencias:note,registrado_por:currentUser?.nombre||"encargado",
         aprobado:false,
       })});
-      setLogs(prev=>[...prev,{date:selectedDate,montados:toMount,recibidos:toReceive,personal:{...personal},note}]);
+      setLogs(prev=>[...prev,{date:selectedDate,montados:toMount,recibidos:toReceive,aprobado:false,personal:{...personal},note}]);
       setElementActions({});
       setNote("");
     } catch(e){ setError("Error: "+e.message); }
     setSaving(false);
   }
 
+  async function eliminarRegistroDia(fecha) {
+    if(!window.confirm(`¿Eliminar todos los registros del ${fecha}? Los elementos volverán a su estado anterior.`)) return;
+    try {
+      // Delete from DB
+      await sbFetch(`registros?obra_id=eq.${obra.id}&fecha=eq.${fecha}`,{method:"DELETE",headers:{"Prefer":"return=minimal"}});
+      // Remove from local state
+      setLogs(prev=>prev.filter(l=>l.date!==fecha));
+    } catch(e){ setError("Error: "+e.message); }
+  }
+
   async function desmontarAdmin(pos, tipo) {
     if(!isAdmin) return;
     if(!window.confirm(`¿${tipo==="montado"?"Desmontar":"Desrecibir"} posición ${pos}?`)) return;
-    if(tipo==="montado") setLogs(prev=>prev.map(l=>({...l,montados:l.montados.filter(p=>p!==pos)})));
-    else setLogs(prev=>prev.map(l=>({...l,recibidos:l.recibidos.filter(p=>p!==pos),montados:l.montados.filter(p=>p!==pos)})));
+    if(tipo==="montado") setLogs(prev=>prev.map(l=>({...l,montados:l.montados.filter(p=>p!==pos&&p!==`${pos}__${elements.find(e=>e.pos===pos)?.tipo||''}`)  })));
+    else setLogs(prev=>prev.map(l=>({...l,recibidos:l.recibidos.filter(p=>p!==pos&&!p.startsWith(pos+'__')),montados:l.montados.filter(p=>p!==pos&&!p.startsWith(pos+'__'))})));
   }
 
   // Stats
   const stats = useMemo(()=>{
     const md=elements.filter(e=>TIPOS_MD.includes(e.tipo));
     const p=elements.filter(e=>e.tipo==="P");
-    const mdM=md.filter(e=>montadosPos.has(e.pos));
-    const pM=p.filter(e=>montadosPos.has(e.pos));
-    const allReceived=elements.filter(e=>recibidosPos.has(e.pos)||montadosPos.has(e.pos));
+    const mdM=md.filter(e=>isMontado(e));
+    const pM=p.filter(e=>isMontado(e));
+    const allReceived=elements.filter(e=>isRecibido(e)||isMontado(e));
     return {
       md:{total:md.length,mounted:mdM.length,areaTotal:md.reduce((s,e)=>s+e.area,0),areaMounted:mdM.reduce((s,e)=>s+e.area,0)},
       p:{total:p.length,mounted:pM.length,areaTotal:p.reduce((s,e)=>s+e.area,0),areaMounted:pM.reduce((s,e)=>s+e.area,0)},
@@ -981,13 +1010,13 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
       map[l.date].note=l.note||map[l.date].note;
     });
     return Object.values(map).map(d=>{
-      const elems=elements.filter(e=>d.montados.includes(e.pos));
+      const elems=elements.filter(e=>d.montados.includes(`${e.pos}__${e.tipo}`)||d.montados.includes(e.pos));
       const mdEl=elems.filter(e=>TIPOS_MD.includes(e.tipo));
       const pEl=elems.filter(e=>e.tipo==="P");
       const areaMD=mdEl.reduce((s,e)=>s+e.area,0);
       const areaP=pEl.reduce((s,e)=>s+e.area,0);
       const areaTotal=areaMD+areaP;
-      const areaRecibida=elements.filter(e=>d.recibidos.includes(e.pos)).reduce((s,e)=>s+e.area,0);
+      const areaRecibida=elements.filter(e=>d.recibidos.includes(`${e.pos}__${e.tipo}`)||d.recibidos.includes(e.pos)).reduce((s,e)=>s+e.area,0);
       const p=d.personal;
       const eq=(p.coordinadores||0)+(p.calidad||0)+(p.lideres||0)+(p.montajistas||0)+(p.ayudantes||0);
       return {...d,areaMD,areaP,areaTotal,areaRecibida,rendLider:p.lideres>0?areaTotal/p.lideres:0,rendMontajista:p.montajistas>0?areaTotal/p.montajistas:0,rendAyudante:p.ayudantes>0?areaTotal/p.ayudantes:0,rendEquipo:eq>0?areaTotal/eq:0,equipoCompleto:eq};
@@ -1216,7 +1245,7 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
                                 <span style={{ fontSize:11,color:"#fff" }}>✓</span>
                               </div>
                             ) : (
-                              <div onClick={()=>canToggleR&&toggleAction(el.pos,"recibido")} style={{ width:18,height:18,borderRadius:3,border:`2px solid ${selR?"#2563eb":"#cbd5e1"}`,background:selR?"#dbeafe":"transparent",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto",cursor:canToggleR?"pointer":"default" }}>
+                              <div onClick={()=>canToggleR&&toggleAction(el,"recibido")} style={{ width:18,height:18,borderRadius:3,border:`2px solid ${selR?"#2563eb":"#cbd5e1"}`,background:selR?"#dbeafe":"transparent",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto",cursor:canToggleR?"pointer":"default" }}>
                                 {selR&&<span style={{ fontSize:11,color:"#2563eb" }}>✓</span>}
                               </div>
                             )}
@@ -1228,7 +1257,7 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
                                 <span style={{ fontSize:11,color:"#fff" }}>✓</span>
                               </div>
                             ) : (
-                              <div onClick={()=>canToggleM&&toggleAction(el.pos,"montado")} style={{ width:18,height:18,borderRadius:3,border:`2px solid ${selM?"#16a34a":"#cbd5e1"}`,background:selM?"#dcfce7":"transparent",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto",cursor:canToggleM?"pointer":"default" }}>
+                              <div onClick={()=>canToggleM&&toggleAction(el,"montado")} style={{ width:18,height:18,borderRadius:3,border:`2px solid ${selM?"#16a34a":"#cbd5e1"}`,background:selM?"#dcfce7":"transparent",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto",cursor:canToggleM?"pointer":"default" }}>
                                 {selM&&<span style={{ fontSize:11,color:"#16a34a" }}>✓</span>}
                               </div>
                             )}
@@ -1298,8 +1327,8 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
                 <tbody key={`elem-${filterTorre}-${filterTipo}-${filterPiso}-${filterLote}-${filterEstado}-${filterSearch}`}>
                   {filteredElements.map(el=>{
                     const estado=getEstado(el.pos);
-                    const logR=logs.find(l=>l.recibidos.includes(el.pos));
-                    const logM=logs.find(l=>l.montados.includes(el.pos));
+                    const logR=logs.find(l=>l.aprobado&&(l.recibidos.includes(`${el.pos}__${el.tipo}`)||l.recibidos.includes(el.pos)));
+                    const logM=logs.find(l=>l.aprobado&&(l.montados.includes(`${el.pos}__${el.tipo}`)||l.montados.includes(el.pos)));
                     const tc=TIPOS_MD.includes(el.tipo)?"#16a34a":"#2563eb";
                     const estadoConfig={montado:{bg:"#dcfce7",color:"#16a34a",label:"MONTADO"},recibido:{bg:"#dbeafe",color:"#2563eb",label:"RECIBIDO"},pendiente:{bg:"#f1f5f9",color:"#94a3b8",label:"PENDIENTE"}}[estado];
                     return (
@@ -1339,7 +1368,8 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
                     <span style={{ color:"#d97706",fontSize:12,fontWeight:"bold" }}>{d.date}</span>
                     <div style={{ display:"flex",gap:6,alignItems:"center" }}>
                       <span style={{ color:"#94a3b8",fontSize:10 }}>Sem. {getWeekNumber(d.date)}</span>
-                      <span style={{ fontSize:9,padding:"1px 6px",borderRadius:8,background:d.aprobado?"#dcfce7":"#fef9c3",color:d.aprobado?"#16a34a":"#d97706" }}>{d.aprobado?"✓":"⏳"}</span>
+                      <span style={{ fontSize:9,padding:"1px 6px",borderRadius:8,background:d.aprobado?"#dcfce7":"#fef9c3",color:d.aprobado?"#16a34a":"#d97706" }}>{d.aprobado?"✓ Aprobado":"⏳ Pendiente"}</span>
+                      {isAdmin&&<button onClick={()=>eliminarRegistroDia(d.date)} style={{ background:"#fee2e2",color:"#dc2626",border:"none",borderRadius:4,padding:"2px 8px",cursor:"pointer",fontFamily:"'DM Mono',monospace",fontSize:9 }}>✕ Eliminar</button>}
                     </div>
                   </div>
                   <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6,marginBottom:8 }}>
@@ -1364,7 +1394,7 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
               {[...new Set(elements.map(e=>`${e.torre}||${e.piso}`).filter(Boolean))].sort().map(key=>{
                 const [torre,piso] = key.split("||");
                 const elems=elements.filter(e=>e.torre===torre&&e.piso===piso);
-                const mounted=elems.filter(e=>montadosPos.has(e.pos));
+                const mounted=elems.filter(e=>isMontado(e));
                 const areaTotal=elems.reduce((s,e)=>s+e.area,0);
                 const areaMounted=mounted.reduce((s,e)=>s+e.area,0);
                 const p=areaTotal>0?(areaMounted/areaTotal)*100:0;
