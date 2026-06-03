@@ -463,8 +463,8 @@ function AdminPanel({ obras, onBack, onObraCreated, setError, onViewObra }) {
         const montadosPos = new Set(aprobados.flatMap(r=>r.elementos_montados?r.elementos_montados.split(",").map(p=>p.trim()).filter(Boolean):[]));
         const recibidosPos = new Set(aprobados.flatMap(r=>r.elementos_recibidos?r.elementos_recibidos.split(",").map(p=>p.trim()).filter(Boolean):[]));
         const totalArea = elems.reduce((s,e)=>s+e.area,0);
-        const mountedArea = elems.filter(e=>isMontado(e)).reduce((s,e)=>s+e.area,0);
-        const receivedArea = elems.filter(e=>isRecibido(e)||isMontado(e)).reduce((s,e)=>s+e.area,0);
+        const mountedArea = elems.filter(e=>montadosPos.has(`${e.pos}__${e.tipo}`)||montadosPos.has(e.pos)).reduce((s,e)=>s+e.area,0);
+        const receivedArea = elems.filter(e=>recibidosPos.has(`${e.pos}__${e.tipo}`)||recibidosPos.has(e.pos)||montadosPos.has(`${e.pos}__${e.tipo}`)||montadosPos.has(e.pos)).reduce((s,e)=>s+e.area,0);
 
         // Weekly breakdown
         const weekMap = {};
