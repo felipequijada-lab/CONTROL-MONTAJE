@@ -1,3 +1,4 @@
+// v2.1 - pos__tipo fix
 import React, { useState, useMemo, useEffect, useRef } from "react";
 import * as XLSX from "xlsx";
 
@@ -456,8 +457,8 @@ function AdminPanel({ obras, onBack, onObraCreated, setError, onViewObra }) {
     try {
       const stats = await Promise.all(obrasActivas.map(async o => {
         const [elems, regs] = await Promise.all([
-          sbFetch(`elementos?obra_id=eq.${o.id}&select=pos,area`),
-          sbFetch(`registros?obra_id=eq.${o.id}&select=fecha,elementos_montados,elementos_recibidos`),
+          sbFetch(`elementos?obra_id=eq.${o.id}&select=pos,area,tipo`),
+          sbFetch(`registros?obra_id=eq.${o.id}&select=fecha,elementos_montados,elementos_recibidos,aprobado`),
         ]);
         const aprobados = regs.filter(r=>r.aprobado);
         const montadosPos = new Set(aprobados.flatMap(r=>r.elementos_montados?r.elementos_montados.split(",").map(p=>p.trim()).filter(Boolean):[]));
@@ -468,7 +469,7 @@ function AdminPanel({ obras, onBack, onObraCreated, setError, onViewObra }) {
 
         // Weekly breakdown
         const weekMap = {};
-        regs.forEach(r=>{
+        aprobados.forEach(r=>{
           const week = getWeekNumber(r.fecha);
           if(!weekMap[week]) weekMap[week] = 0;
           const elPos = r.elementos_montados?r.elementos_montados.split(",").map(p=>p.trim()).filter(Boolean):[];
@@ -882,25 +883,16 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
     setLoading(false);
   }
 
-  // Keys stored as "pos__tipo" to avoid collision between MD/P with same number
   const montadosPos     = useMemo(()=>new Set(logs.filter(l=>l.aprobado).flatMap(l=>l.montados)),[logs]);
   const recibidosPos    = useMemo(()=>new Set(logs.filter(l=>l.aprobado).flatMap(l=>l.recibidos)),[logs]);
   const montadosPending = useMemo(()=>new Set(logs.filter(l=>!l.aprobado).flatMap(l=>l.montados)),[logs]);
   const recibidosPending= useMemo(()=>new Set(logs.filter(l=>!l.aprobado).flatMap(l=>l.recibidos)),[logs]);
-  // Helper to check by element object
-  const isMontado  = (el) => { const k=`${el.pos}__${el.tipo}`; return montadosPos.has(k)||montadosPending.has(k); };
-  const isRecibido = (el) => { const k=`${el.pos}__${el.tipo}`; return recibidosPos.has(k)||recibidosPending.has(k); };
-  const isPendingM = (el) => { const k=`${el.pos}__${el.tipo}`; return montadosPending.has(k); };
-  const isPendingR = (el) => { const k=`${el.pos}__${el.tipo}`; return recibidosPending.has(k); };
 
-  // Use pos as stored — but elements table has unique ids, use id as key
-  // Key = obra_id + pos + tipo to avoid collision between MD and P with same number
-  function elKey(el) { return `${el.pos}__${el.tipo}`; }
-  function posKey(pos, elements) {
-    // Find element to get its tipo for the key
-    const el = elements.find(e=>e.pos===pos);
-    return el ? `${pos}__${el.tipo}` : pos;
-  }
+  const elK        = (el) => `${el.pos}__${el.tipo}`;
+  const isMontado  = (el) => { const k=elK(el); return montadosPos.has(k)||montadosPending.has(k); };
+  const isRecibido = (el) => { const k=elK(el); return recibidosPos.has(k)||recibidosPending.has(k); };
+  const isPendingM = (el) => montadosPending.has(elK(el));
+  const isPendingR = (el) => recibidosPending.has(elK(el));
 
   function getEstado(key) {
     if(montadosPos.has(key)||montadosPending.has(key)) return "montado";
@@ -908,32 +900,25 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
     return "pendiente";
   }
 
-  // Toggle element action
-  function toggleAction(pos, action) {
+  // Toggle element action — key is pos__tipo
+  function toggleAction(el, action) {
+    const key = `${el.pos}__${el.tipo}`;
     if(isClosed && !isAdmin) return;
-    const estado = getEstado(pos);
-    if(estado==="montado" && !isAdmin) return; // can't change mounted unless admin
-
+    const estado = getEstado(key);
+    if(estado==="montado" && !isAdmin) return;
     setElementActions(prev=>{
-      const current = prev[pos] || null;
+      const current = prev[key] || null;
       if(action==="recibido") {
-        if(current==="recibido") return {...prev,[pos]:null};
-        if(current==="ambos") return {...prev,[pos]:"montado"};
-        if(current==="montado") return {...prev,[pos]:"ambos"};
-        return {...prev,[pos]:"recibido"};
+        if(current==="recibido") return {...prev,[key]:null};
+        if(current==="ambos") return {...prev,[key]:"montado"};
+        if(current==="montado") return {...prev,[key]:"ambos"};
+        return {...prev,[key]:"recibido"};
       }
       if(action==="montado") {
-        // Must be received first
-        const willBeReceived = current==="recibido"||current==="ambos"||recibidosPos.has(pos)||montadosPos.has(pos);
-        if(!willBeReceived) {
-          // Auto-select recibido too
-          if(current==="montado") return {...prev,[pos]:null};
-          return {...prev,[pos]:"ambos"};
-        }
-        if(current==="montado") return {...prev,[pos]:"recibido"};
-        if(current==="ambos") return {...prev,[pos]:"recibido"};
-        if(current==="recibido") return {...prev,[pos]:"ambos"};
-        return {...prev,[pos]:"montado"};
+        if(current==="montado") return {...prev,[key]:null};
+        if(current==="ambos") return {...prev,[key]:"recibido"};
+        if(current==="recibido") return {...prev,[key]:"ambos"};
+        return {...prev,[key]:"ambos"}; // auto-select recibido too
       }
       return prev;
     });
