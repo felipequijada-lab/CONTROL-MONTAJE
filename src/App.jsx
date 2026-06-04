@@ -502,16 +502,17 @@ function AdminPanel({ obras, onBack, onObraCreated, setError, onViewObra }) {
         const montadosPos = new Set(aprobados.flatMap(r=>r.elementos_montados?r.elementos_montados.split(",").map(p=>p.trim()).filter(Boolean):[]));
         const recibidosPos = new Set(aprobados.flatMap(r=>r.elementos_recibidos?r.elementos_recibidos.split(",").map(p=>p.trim()).filter(Boolean):[]));
         const totalArea = elems.reduce((s,e)=>s+e.area,0);
-        const mountedArea = elems.filter(e=>montadosPos.has(`${e.torre}__${e.piso}__${e.pos}__${e.tipo}`)||montadosPos.has(e.pos)).reduce((s,e)=>s+e.area,0);
-        const receivedArea = elems.filter(e=>recibidosPos.has(`${e.torre}__${e.piso}__${e.pos}__${e.tipo}`)||recibidosPos.has(e.pos)||montadosPos.has(`${e.torre}__${e.piso}__${e.pos}__${e.tipo}`)||montadosPos.has(e.pos)).reduce((s,e)=>s+e.area,0);
+        const chkM = (e,keys) => keys.has(`${e.torre}__${e.piso}__${e.pos}__${e.tipo}`)||keys.has(`${e.pos}__${e.tipo}`)||keys.has(e.pos);
+        const mountedArea = elems.filter(e=>chkM(e,montadosPos)).reduce((s,e)=>s+e.area,0);
+        const receivedArea = elems.filter(e=>chkM(e,recibidosPos)||chkM(e,montadosPos)).reduce((s,e)=>s+e.area,0);
 
         // Weekly breakdown
         const weekMap = {};
         aprobados.forEach(r=>{
           const week = getWeekNumber(r.fecha);
           if(!weekMap[week]) weekMap[week] = 0;
-          const elPos = r.elementos_montados?r.elementos_montados.split(",").map(p=>p.trim()).filter(Boolean):[];
-          weekMap[week] += elems.filter(e=>elPos.includes(e.pos)).reduce((s,e)=>s+e.area,0);
+          const elPos = new Set(r.elementos_montados?r.elementos_montados.split(",").map(p=>p.trim()).filter(Boolean):[]);
+          weekMap[week] += elems.filter(e=>chkM(e,elPos)).reduce((s,e)=>s+e.area,0);
         });
 
         return { obra:o, totalArea, mountedArea, receivedArea, pctMounted:totalArea>0?(mountedArea/totalArea)*100:0, pctReceived:totalArea>0?(receivedArea/totalArea)*100:0, weekMap };
