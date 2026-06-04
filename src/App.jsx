@@ -933,7 +933,11 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
   }
 
   const montadosPos     = useMemo(()=>new Set(logs.filter(l=>l.aprobado).flatMap(l=>l.montados)),[logs]);
-  const recibidosPos    = useMemo(()=>new Set(logs.filter(l=>l.aprobado).flatMap(l=>l.recibidos)),[logs]);
+  // recibidosPos = ALL elements that appeared in recibidos (including those also mounted)
+  const recibidosPos    = useMemo(()=>new Set([
+    ...logs.filter(l=>l.aprobado).flatMap(l=>l.recibidos),
+    ...logs.filter(l=>l.aprobado).flatMap(l=>l.montados), // montados also count as received
+  ]),[logs]);
   const montadosPending = useMemo(()=>new Set(logs.filter(l=>!l.aprobado).flatMap(l=>l.montados)),[logs]);
   const recibidosPending= useMemo(()=>new Set(logs.filter(l=>!l.aprobado).flatMap(l=>l.recibidos)),[logs]);
 
@@ -1021,10 +1025,10 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
     const p=elements.filter(e=>e.tipo==="P");
     const mdM=md.filter(e=>isMontado(e));
     const pM=p.filter(e=>isMontado(e));
-    // recibidos = elementos recibidos aun no montados
+    // en obra = todos los que tienen algún registro (recibidos o montados)
+    const enObra = elements.filter(e=>isRecibido(e)); // recibidosPos now includes montados
+    // solo recibidos (no montados aún)
     const soloRecibidos = elements.filter(e=>isRecibido(e)&&!isMontado(e));
-    // total en obra = recibidos + montados
-    const enObra = elements.filter(e=>isRecibido(e)||isMontado(e));
     return {
       md:{total:md.length,mounted:mdM.length,areaTotal:md.reduce((s,e)=>s+e.area,0),areaMounted:mdM.reduce((s,e)=>s+e.area,0)},
       p:{total:p.length,mounted:pM.length,areaTotal:p.reduce((s,e)=>s+e.area,0),areaMounted:pM.reduce((s,e)=>s+e.area,0)},
@@ -1367,7 +1371,7 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
                 </thead>
                 <tbody key={`elem-${filterTorre}-${filterTipo}-${filterPiso}-${filterLote}-${filterEstado}-${filterSearch}`}>
                   {filteredElements.map(el=>{
-                    const estado=getEstado(el.pos);
+                    const estado=getEstado(`${el.torre}__${el.piso}__${el.pos}__${el.tipo}`);
                     const logR=logs.find(l=>l.aprobado&&(l.recibidos.includes(`${el.torre}__${el.piso}__${el.pos}__${el.tipo}`)||l.recibidos.includes(`${el.pos}__${el.tipo}`)||l.recibidos.includes(el.pos)));
                     const logM=logs.find(l=>l.aprobado&&(l.montados.includes(`${el.torre}__${el.piso}__${el.pos}__${el.tipo}`)||l.montados.includes(`${el.pos}__${el.tipo}`)||l.montados.includes(el.pos)));
                     const tc=TIPOS_MD.includes(el.tipo)?"#16a34a":"#2563eb";
