@@ -495,7 +495,17 @@ function AdminPanel({ obras, onBack, onObraCreated, setError, onViewObra }) {
     try {
       const stats = await Promise.all(obrasActivas.map(async o => {
         const [elems, regs] = await Promise.all([
-          sbFetch(`elementos?obra_id=eq.${o.id}&select=pos,area,tipo,torre,piso`),
+          (async()=>{
+            const all=[];
+            let offset=0;
+            while(true){
+              const batch=await sbFetch(`elementos?obra_id=eq.${o.id}&select=pos,area,tipo,torre,piso&limit=1000&offset=${offset}`);
+              all.push(...batch);
+              if(batch.length<1000) break;
+              offset+=1000;
+            }
+            return all;
+          })(),
           sbFetch(`registros?obra_id=eq.${o.id}&select=fecha,elementos_montados,elementos_recibidos,aprobado`),
         ]);
         const aprobados = regs.filter(r=>r.aprobado);
