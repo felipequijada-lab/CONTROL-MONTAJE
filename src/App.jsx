@@ -1344,7 +1344,7 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
           <Panel title="INVENTARIO DE ELEMENTOS">
             <div style={{ display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:16 }}>
               <StatCard label="PENDIENTES" value={elements.filter(e=>getEstado(e.pos)==="pendiente").length} sub={fmt2(elements.filter(e=>getEstado(e.pos)==="pendiente").reduce((s,e)=>s+e.area,0))+" m²"} color="#94a3b8"/>
-              <StatCard label="RECIBIDOS EN OBRA" value={elements.filter(e=>getEstado(e.pos)==="recibido").length} sub={fmt2(elements.filter(e=>getEstado(e.pos)==="recibido").reduce((s,e)=>s+e.area,0))+" m²"} color="#2563eb"/>
+              <StatCard label="RECIBIDOS EN OBRA" value={elements.filter(e=>getEstado(`${e.torre}__${e.piso}__${e.pos}__${e.tipo}`)!=="pendiente").length} sub={fmt2(elements.filter(e=>getEstado(`${e.torre}__${e.piso}__${e.pos}__${e.tipo}`)!=="pendiente").reduce((s,e)=>s+e.area,0))+" m²"} color="#2563eb"/>
               <StatCard label="MONTADOS" value={montadosPos.size} sub={fmt2(stats.all.areaMounted)+" m²"} color="#16a34a"/>
               <StatCard label="% AVANCE" value={fmtPct(pctAll)} sub={fmt2(stats.all.areaMounted)+" / "+fmt2(stats.all.areaTotal)+" m²"} color="#d97706"/>
             </div>
