@@ -46,9 +46,14 @@ const defaultPersonal = () => ({coordinadores:1,calidad:1,lideres:1,montajistas:
 // ── PDF Semanal ───────────────────────────────────────────────────────────────
 function generatePDF(weekData, elements, dailyStats, weekLabel, obraName, programaAcum) {
   const fecha = new Date().toLocaleDateString('es-CL');
-  const weekElements = weekData.montados.map(pos => {
-    const el = elements.find(e=>e.pos===pos);
-    const d  = dailyStats.find(d=>d.montados.includes(pos));
+  const weekElements = weekData.montados.map(key => {
+    // key can be torre__piso__pos__tipo or pos__tipo or pos (backward compat)
+    const parts = key.split("__");
+    let el;
+    if(parts.length===4) el = elements.find(e=>`${e.torre}__${e.piso}__${e.pos}__${e.tipo}`===key);
+    else if(parts.length===2) el = elements.find(e=>`${e.pos}__${e.tipo}`===key);
+    else el = elements.find(e=>e.pos===key);
+    const d = dailyStats.find(d=>d.montados.includes(key));
     return el ? {...el, fecha:d?.date||""} : null;
   }).filter(Boolean);
   const incidencias = dailyStats.filter(d=>getWeekNumber(d.date)===weekLabel);
@@ -64,6 +69,28 @@ function generatePDF(weekData, elements, dailyStats, weekLabel, obraName, progra
   <div class="kpi"><div class="kpi-label">DÍAS EFECTIVOS</div><div class="kpi-value amber">${weekData.diasEfectivos}</div></div>
   <div class="kpi"><div class="kpi-label">REND. EFECTIVO</div><div class="kpi-value ${weekData.rendEfectivo>=600?'green':'red'}" style="${weekData.rendEfectivo<600?'color:#dc2626':''}">${fmt2(weekData.rendEfectivo)}</div></div>
 </div>
+${(()=>{
+  const prog = programaAcum && programaAcum.find(p=>p.semana===weekLabel);
+  if(!prog) return '';
+  const programado = prog.acum - (programaAcum[programaAcum.indexOf(prog)-1]?.acum||0);
+  const real = weekData.areaTotal;
+  const diff = real - programado;
+  const pct = programado>0 ? (diff/programado)*100 : 0;
+  const color = diff>=0 ? '#16a34a' : '#dc2626';
+  const label = diff>=0 ? 'SUPERÁVIT' : 'DÉFICIT';
+  return `<div style="background:#fff;border:1px solid #cbd5e1;border-radius:6px;padding:12px 16px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center">
+  <div style="font-size:9px;color:#64748b;letter-spacing:2px">CUMPLIMIENTO DE PROGRAMA — SEMANA ${weekLabel}</div>
+  <div style="display:flex;gap:24px;align-items:center">
+    <div style="text-align:center"><div style="font-size:8px;color:#94a3b8">PROGRAMADO</div><div style="font-size:14px;font-weight:bold;color:#2563eb">${fmt2(programado)} m²</div></div>
+    <div style="text-align:center"><div style="font-size:8px;color:#94a3b8">REAL MONTADO</div><div style="font-size:14px;font-weight:bold;color:#d97706">${fmt2(real)} m²</div></div>
+    <div style="text-align:center;padding:8px 16px;background:${diff>=0?'#dcfce7':'#fee2e2'};border-radius:6px;border:1px solid ${diff>=0?'#16a34a33':'#dc262633'}">
+      <div style="font-size:8px;color:${color};letter-spacing:1px">${label}</div>
+      <div style="font-size:16px;font-weight:bold;color:${color}">${diff>=0?'+':''}${fmt2(diff)} m²</div>
+      <div style="font-size:9px;color:${color}">${diff>=0?'+':''}${(Math.round(pct*10)/10).toFixed(1)}%</div>
+    </div>
+  </div>
+</div>`;
+})()}
 ${programaAcum&&programaAcum.length>0?`<div class="section"><div class="section-title">CURVA S</div><div style="padding:12px"><img id="curvaSImg" src="" style="width:100%;border-radius:4px"/></div></div>`:''}
 <div class="section"><div class="section-title">RENDIMIENTOS</div><table>
 <tr><th>CARGO</th><th>PERSONAS</th><th>m²/PERSONA/DÍA</th><th>m²/PERSONA/SEMANA</th></tr>
@@ -72,16 +99,27 @@ ${programaAcum&&programaAcum.length>0?`<div class="section"><div class="section-
 <tr><td class="amber">Ayudante</td><td>${weekData.personal.ayudantes}</td><td>${fmt2(weekData.rendAyudante)}</td><td>${fmt2(weekData.rendAyudante*weekData.diasEfectivos)}</td></tr>
 <tr><td>Equipo</td><td>${weekData.equipoCompleto}</td><td>${fmt2(weekData.rendEquipo)}</td><td>${fmt2(weekData.rendEquipo*weekData.diasEfectivos)}</td></tr>
 </table></div>
-<div class="section"><div class="section-title">ELEMENTOS MONTADOS</div><table>
-<tr><th>LOTE</th><th>TORRE</th><th>PISO</th><th>TIPO</th><th>POSICIÓN</th><th>ÁREA m²</th><th>FECHA</th></tr>
-${weekElements.map(el=>`<tr><td>${el.lote||""}</td><td>${el.torre||""}</td><td>${el.piso||""}</td><td class="${TIPOS_MD.includes(el.tipo)?"green":"blue"}">${el.tipo}</td><td>${el.pos}</td><td>${fmt2(el.area)}</td><td>${el.fecha}</td></tr>`).join('')}
-<tr style="background:#f1f5f9"><td colspan="5"><b>TOTAL</b></td><td class="amber"><b>${fmt2(weekData.areaTotal)}</b></td><td></td></tr>
-</table></div>
 <div class="section"><div class="section-title">INCIDENCIAS</div><table>
 <tr><th>FECHA</th><th>OBSERVACIÓN</th></tr>
 ${incidencias.map(d=>`<tr><td class="amber">${d.date}</td><td>${d.note||"Sin incidencias"}</td></tr>`).join('')}
 ${incidencias.length===0?'<tr><td colspan="2" style="text-align:center;color:#94a3b8">Sin incidencias</td></tr>':''}
 </table></div>
+<div class="section"><div class="section-title">ELEMENTOS MONTADOS — SEMANA ${weekLabel}</div><table>
+<tr><th>LOTE</th><th>TORRE</th><th>PISO</th><th>TIPO</th><th>POSICIÓN</th><th>ÁREA m²</th><th>FECHA</th></tr>
+${weekElements.map(el=>`<tr><td>${el.lote||""}</td><td>${el.torre||""}</td><td>${el.piso||""}</td><td class="${TIPOS_MD.includes(el.tipo)?"green":"blue"}">${el.tipo}</td><td>${el.pos}</td><td>${fmt2(el.area)}</td><td>${el.fecha}</td></tr>`).join('')}
+<tr style="background:#f1f5f9"><td colspan="5"><b>TOTAL</b></td><td class="amber"><b>${fmt2(weekData.areaTotal)} m²</b></td><td></td></tr>
+</table></div>
+<div style="margin-top:24px;padding:20px 28px;background:#fff;border:1px solid #cbd5e1;border-radius:8px;display:flex;justify-content:space-between;align-items:flex-end">
+  <div><div style="font-size:8px;color:#94a3b8;letter-spacing:2px;margin-bottom:4px">INFORME EMITIDO POR</div><div style="font-size:9px;color:#64748b">${fecha}</div></div>
+  <div style="text-align:center">
+    <div style="height:36px"></div>
+    <div style="border-top:1px solid #1e293b;padding-top:8px;width:220px;margin:0 auto">
+      <div style="font-size:12px;color:#1e293b;font-weight:bold;letter-spacing:1px">Felipe Quijada M.</div>
+      <div style="font-size:9px;color:#64748b;margin-top:3px">Subgerente de Montaje · Baumax SPA</div>
+    </div>
+  </div>
+  <div style="font-size:9px;color:#94a3b8;text-align:right">Control de Montaje<br/>Baumax SPA</div>
+</div>
 <div class="footer">Informe generado automáticamente · Control de Montaje · Baumax SPA · Semana ${weekLabel}</div>
 </body></html>`;
 
