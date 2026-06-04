@@ -495,7 +495,7 @@ function AdminPanel({ obras, onBack, onObraCreated, setError, onViewObra }) {
     try {
       const stats = await Promise.all(obrasActivas.map(async o => {
         const [elems, regs] = await Promise.all([
-          sbFetch(`elementos?obra_id=eq.${o.id}&select=pos,area,tipo`),
+          sbFetch(`elementos?obra_id=eq.${o.id}&select=pos,area,tipo,torre,piso`),
           sbFetch(`registros?obra_id=eq.${o.id}&select=fecha,elementos_montados,elementos_recibidos,aprobado`),
         ]);
         const aprobados = regs.filter(r=>r.aprobado);
