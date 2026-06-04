@@ -1200,7 +1200,7 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
                   </thead>
                   <tbody key={`${filterTorre}-${filterTipo}-${filterPiso}-${filterLote}-${filterEstado}-${filterSearch}`}>
                     {filteredElements.map(el=>{
-                      const const elKey = `${el.pos}__${el.tipo}`;
+                      const elKey = `${el.pos}__${el.tipo}`;
                       const estado = getEstado(elKey);
                       const isMounted  = estado==="montado";
                       const isReceived = estado==="recibido";
