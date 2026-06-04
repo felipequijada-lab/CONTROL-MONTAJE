@@ -924,7 +924,7 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
         // For old format, try to find the element and reconstruct the key
         const rawMontados=(row.elementos_montados||"").split(",").map(p=>p.trim()).filter(Boolean);
         const rawRecibidos=(row.elementos_recibidos||"").split(",").map(p=>p.trim()).filter(Boolean);
-        expanded.push({date:row.fecha,montados:rawMontados,recibidos:rawRecibidos,aprobado:row.aprobado===true,personal:{coordinadores:row.coordinadores||0,calidad:row.calidad||0,lideres:row.lideres||0,montajistas:row.montajistas||0,ayudantes:row.ayudantes||0},note:row.incidencias||""});
+        expanded.push({date:row.fecha,montados:rawMontados,recibidos:rawRecibidos,aprobado:row.aprobado===true||row.aprobado==="true",personal:{coordinadores:row.coordinadores||0,calidad:row.calidad||0,lideres:row.lideres||0,montajistas:row.montajistas||0,ayudantes:row.ayudantes||0},note:row.incidencias||""});
       });
       setLogs(expanded);
       setPrograma(progData);
@@ -1021,12 +1021,17 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
     const p=elements.filter(e=>e.tipo==="P");
     const mdM=md.filter(e=>isMontado(e));
     const pM=p.filter(e=>isMontado(e));
-    const allReceived=elements.filter(e=>isRecibido(e)||isMontado(e));
+    // recibidos = elementos recibidos aun no montados
+    const soloRecibidos = elements.filter(e=>isRecibido(e)&&!isMontado(e));
+    // total en obra = recibidos + montados
+    const enObra = elements.filter(e=>isRecibido(e)||isMontado(e));
     return {
       md:{total:md.length,mounted:mdM.length,areaTotal:md.reduce((s,e)=>s+e.area,0),areaMounted:mdM.reduce((s,e)=>s+e.area,0)},
       p:{total:p.length,mounted:pM.length,areaTotal:p.reduce((s,e)=>s+e.area,0),areaMounted:pM.reduce((s,e)=>s+e.area,0)},
       all:{total:elements.length,mounted:montadosPos.size,areaTotal:elements.reduce((s,e)=>s+e.area,0),areaMounted:[...mdM,...pM].reduce((s,e)=>s+e.area,0)},
-      areaReceived:allReceived.reduce((s,e)=>s+e.area,0),
+      areaReceived:enObra.reduce((s,e)=>s+e.area,0),
+      countReceived:soloRecibidos.length,
+      areaOnlyReceived:soloRecibidos.reduce((s,e)=>s+e.area,0),
     };
   },[elements,montadosPos,recibidosPos]);
 
