@@ -1641,8 +1641,13 @@ function BarrasSemanales({ dailyStats, elements }) {
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
     const ctx = canvas.getContext('2d');
-    const W=canvas.width, H=canvas.height;
+    ctx.scale(dpr, dpr);
+    const W=rect.width, H=rect.height;
     const padL=55, padR=20, padT=30, padB=45;
     const cW=W-padL-padR, cH=H-padT-padB;
     const maxVal = Math.max(...data.flatMap(d=>[d.montados,d.recibidos]), 100);
@@ -1730,7 +1735,7 @@ function BarrasSemanales({ dailyStats, elements }) {
           <div style={{ fontSize:20,fontFamily:"'Archivo Black',sans-serif",color:"#16a34a" }}>{Math.round(totMon)} m²</div>
         </div>
       </div>
-      <canvas ref={canvasRef} width={780} height={260} style={{ width:"100%",maxWidth:780,display:"block" }}/>
+      <canvas ref={canvasRef} style={{ width:"100%",maxWidth:780,height:260,display:"block" }}/>
     </div>
   );
 }
@@ -1740,8 +1745,12 @@ function CurvaS({ data }) {
   const canvasRef = useRef();
   useEffect(()=>{
     const canvas=canvasRef.current; if(!canvas) return;
+    const dpr=window.devicePixelRatio||1;
+    const rect=canvas.getBoundingClientRect();
+    canvas.width=rect.width*dpr; canvas.height=rect.height*dpr;
     const ctx=canvas.getContext('2d');
-    const W=canvas.width,H=canvas.height,padL=60,padR=30,padT=30,padB=50;
+    ctx.scale(dpr,dpr);
+    const W=rect.width,H=rect.height,padL=60,padR=30,padT=30,padB=50;
     const cW=W-padL-padR,cH=H-padT-padB;
     const maxVal=Math.max(...data.map(d=>d.acum),100);
     ctx.clearRect(0,0,W,H);
@@ -1795,7 +1804,7 @@ function CurvaS({ data }) {
     ctx.fillText('Semana',padL+cW/2,H-5);
     ctx.save(); ctx.translate(14,padT+cH/2); ctx.rotate(-Math.PI/2); ctx.fillText('m² acumulados',0,0); ctx.restore();
   },[data]);
-  return <canvas id="curvaSMain" ref={canvasRef} width={780} height={320} style={{ width:"100%",maxWidth:780,display:"block",margin:"0 auto" }}/>;
+  return <canvas id="curvaSMain" ref={canvasRef} style={{ width:"100%",maxWidth:780,height:320,display:"block",margin:"0 auto" }}/>;
 }
 
 // ── Shared Components ─────────────────────────────────────────────────────────
