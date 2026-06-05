@@ -1766,10 +1766,12 @@ function CurvaS({ data }) {
       const y=padT+(cH/4)*i;
       ctx.strokeStyle='#e2e8f0'; ctx.lineWidth=1;
       ctx.beginPath(); ctx.moveTo(padL,y); ctx.lineTo(padL+cW,y); ctx.stroke();
-      ctx.fillStyle='#2563eb'; ctx.font='10px monospace'; ctx.textAlign='right';
-      ctx.fillText(Math.round(maxAcum*(1-i/4)),padL-6,y+4);
-      ctx.fillStyle='#94a3b8'; ctx.textAlign='left';
-      ctx.fillText(Math.round(maxWeek*(1-i/4)),padL+cW+6,y+4);
+      // Left axis = semanal (bars)
+      ctx.fillStyle='#475569'; ctx.font='10px monospace'; ctx.textAlign='right';
+      ctx.fillText(Math.round(maxWeek*(1-i/4)),padL-6,y+4);
+      // Right axis = acumulado (lines)
+      ctx.fillStyle='#2563eb'; ctx.textAlign='left';
+      ctx.fillText(Math.round(maxAcum*(1-i/4)),padL+cW+6,y+4);
     }
 
     const xPos=(i)=>padL+(n<=1?cW/2:(i/(n-1))*cW);
@@ -1785,10 +1787,10 @@ function CurvaS({ data }) {
 
     const bW=Math.max(5,(cW/(n||1))*0.16);
 
-    // Bars programado semanal
+    // Bars programado semanal (orange to differentiate from blue cumulative line)
     data.forEach((d,i)=>{
       const x=xPos(i), h=(weeklyProg[i]/maxWeek)*cH;
-      ctx.fillStyle='rgba(147,197,253,0.75)';
+      ctx.fillStyle='rgba(251,146,60,0.6)'; // orange
       ctx.fillRect(x-bW-1,padT+cH-h,bW,h);
     });
 
@@ -1831,7 +1833,7 @@ function CurvaS({ data }) {
 
     // Legend
     const ly=16;
-    ctx.fillStyle='rgba(147,197,253,0.8)'; ctx.fillRect(padL,ly,11,9);
+    ctx.fillStyle='rgba(251,146,60,0.7)'; ctx.fillRect(padL,ly,11,9);
     ctx.fillStyle='#64748b'; ctx.font='10px monospace'; ctx.textAlign='left'; ctx.fillText('Prog. sem.',padL+15,ly+8);
     ctx.fillStyle='rgba(74,222,128,0.85)'; ctx.fillRect(padL+88,ly,11,9);
     ctx.fillStyle='#64748b'; ctx.fillText('Real sem.',padL+103,ly+8);
@@ -1846,9 +1848,9 @@ function CurvaS({ data }) {
     ctx.fillStyle='#64748b'; ctx.font='10px monospace'; ctx.textAlign='center';
     ctx.fillText('Semana',padL+cW/2,H-3);
     ctx.save(); ctx.translate(12,padT+cH/2); ctx.rotate(-Math.PI/2);
-    ctx.fillStyle='#2563eb'; ctx.fillText('m² acumulado',0,0); ctx.restore();
+    ctx.fillStyle='#475569'; ctx.font='10px monospace'; ctx.fillText('m² semanal',0,0); ctx.restore();
     ctx.save(); ctx.translate(W-10,padT+cH/2); ctx.rotate(Math.PI/2);
-    ctx.fillStyle='#94a3b8'; ctx.fillText('m² semanal',0,0); ctx.restore();
+    ctx.fillStyle='#2563eb'; ctx.font='10px monospace'; ctx.fillText('m² acumulado',0,0); ctx.restore();
   },[data]);
   return <canvas id="curvaSMain" ref={canvasRef} style={{ width:"100%",maxWidth:820,height:360,display:"block",margin:"0 auto" }}/>;
 }
