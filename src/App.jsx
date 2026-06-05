@@ -1175,7 +1175,7 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
       const mtr=filterTorre==="TODAS"||e.torre===filterTorre;
       const mp=filterPiso==="TODOS"||e.piso===filterPiso;
       const ml=filterLote==="TODOS"||e.lote===filterLote;
-      const est=getEstado(e.pos);
+      const est=getEstado(`${e.torre}__${e.piso}__${e.pos}__${e.tipo}`);
       const me=filterEstado==="TODOS"||est===filterEstado;
       return ms&&mt&&mtr&&mp&&ml&&me;
     }).sort((a,b)=>{
@@ -1403,7 +1403,7 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
         {activeTab==="elementos" && (
           <Panel title="INVENTARIO DE ELEMENTOS">
             <div style={{ display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:16 }}>
-              <StatCard label="PENDIENTES" value={elements.filter(e=>getEstado(e.pos)==="pendiente").length} sub={fmt2(elements.filter(e=>getEstado(e.pos)==="pendiente").reduce((s,e)=>s+e.area,0))+" m²"} color="#94a3b8"/>
+              <StatCard label="PENDIENTES" value={elements.filter(e=>getEstado(`${e.torre}__${e.piso}__${e.pos}__${e.tipo}`)==="pendiente").length} sub={fmt2(elements.filter(e=>getEstado(`${e.torre}__${e.piso}__${e.pos}__${e.tipo}`)==="pendiente").reduce((s,e)=>s+e.area,0))+" m²"} color="#94a3b8"/>
               <StatCard label="RECIBIDOS EN OBRA" value={elements.filter(e=>getEstado(`${e.torre}__${e.piso}__${e.pos}__${e.tipo}`)!=="pendiente").length} sub={fmt2(elements.filter(e=>getEstado(`${e.torre}__${e.piso}__${e.pos}__${e.tipo}`)!=="pendiente").reduce((s,e)=>s+e.area,0))+" m²"} color="#2563eb"/>
               <StatCard label="MONTADOS" value={montadosPos.size} sub={fmt2(stats.all.areaMounted)+" m²"} color="#16a34a"/>
               <StatCard label="% AVANCE" value={fmtPct(pctAll)} sub={fmt2(stats.all.areaMounted)+" / "+fmt2(stats.all.areaTotal)+" m²"} color="#d97706"/>
@@ -1740,7 +1740,7 @@ function BarrasSemanales({ dailyStats, elements }) {
   );
 }
 
-// ── Curva S ───────────────────────────────────────────────────────────────────
+// ── Curva S (dual axis) ─────────────────────────────────────────────────────
 function CurvaS({ data }) {
   const canvasRef = useRef();
   useEffect(()=>{
@@ -1750,61 +1750,107 @@ function CurvaS({ data }) {
     canvas.width=rect.width*dpr; canvas.height=rect.height*dpr;
     const ctx=canvas.getContext('2d');
     ctx.scale(dpr,dpr);
-    const W=rect.width,H=rect.height,padL=60,padR=30,padT=30,padB=50;
-    const cW=W-padL-padR,cH=H-padT-padB;
-    const maxVal=Math.max(...data.map(d=>d.acum),100);
-    ctx.clearRect(0,0,W,H);
-    ctx.fillStyle='#f8fafc'; ctx.fillRect(0,0,W,H);
+    const W=rect.width, H=rect.height;
+    const padL=64, padR=64, padT=36, padB=52;
+    const cW=W-padL-padR, cH=H-padT-padB;
+    const n=data.length; if(n===0) return;
+
+    const weeklyProg = data.map((d,i)=> d.acum-(i>0?data[i-1].acum:0));
+    const weeklyReal = data.map((d,i)=> d.real!==null?(d.real-(i>0&&data[i-1].real!==null?data[i-1].real:0)):null);
+    const maxAcum = Math.max(...data.map(d=>Math.max(d.acum,d.real||0)),100);
+    const maxWeek = Math.max(...weeklyProg,...weeklyReal.filter(v=>v!==null),10);
+
+    ctx.clearRect(0,0,W,H); ctx.fillStyle='#f8fafc'; ctx.fillRect(0,0,W,H);
+
     for(let i=0;i<=4;i++){
       const y=padT+(cH/4)*i;
       ctx.strokeStyle='#e2e8f0'; ctx.lineWidth=1;
       ctx.beginPath(); ctx.moveTo(padL,y); ctx.lineTo(padL+cW,y); ctx.stroke();
-      ctx.fillStyle='#64748b'; ctx.font='11px monospace'; ctx.textAlign='right';
-      ctx.fillText(Math.round(maxVal*(1-i/4)),padL-8,y+4);
+      ctx.fillStyle='#2563eb'; ctx.font='10px monospace'; ctx.textAlign='right';
+      ctx.fillText(Math.round(maxAcum*(1-i/4)),padL-6,y+4);
+      ctx.fillStyle='#94a3b8'; ctx.textAlign='left';
+      ctx.fillText(Math.round(maxWeek*(1-i/4)),padL+cW+6,y+4);
     }
+
+    const xPos=(i)=>padL+(n<=1?cW/2:(i/(n-1))*cW);
     data.forEach((d,i)=>{
-      const x=padL+(i/(data.length-1||1))*cW;
-      ctx.strokeStyle='#e2e8f0'; ctx.lineWidth=1;
+      const x=xPos(i);
+      ctx.strokeStyle='#f1f5f9'; ctx.lineWidth=1;
       ctx.beginPath(); ctx.moveTo(x,padT); ctx.lineTo(x,padT+cH); ctx.stroke();
-      ctx.fillStyle='#64748b'; ctx.font='10px monospace'; ctx.textAlign='center';
-      ctx.fillText("S"+d.semana.split('.')[0],x,padT+cH+20);
+      ctx.fillStyle='#475569'; ctx.font='10px monospace'; ctx.textAlign='center';
+      ctx.fillText("S"+d.semana.split('.')[0],x,padT+cH+16);
       ctx.fillStyle='#94a3b8'; ctx.font='9px monospace';
-      ctx.fillText(d.semana.split('.')[1],x,padT+cH+32);
+      ctx.fillText(d.semana.split('.')[1],x,padT+cH+28);
     });
+
+    const bW=Math.max(5,(cW/(n||1))*0.16);
+
+    // Bars programado semanal
+    data.forEach((d,i)=>{
+      const x=xPos(i), h=(weeklyProg[i]/maxWeek)*cH;
+      ctx.fillStyle='rgba(147,197,253,0.75)';
+      ctx.fillRect(x-bW-1,padT+cH-h,bW,h);
+    });
+
+    // Bars real semanal
+    data.forEach((d,i)=>{
+      if(weeklyReal[i]===null||weeklyReal[i]<0) return;
+      const x=xPos(i), h=(weeklyReal[i]/maxWeek)*cH;
+      ctx.fillStyle='rgba(74,222,128,0.85)';
+      ctx.fillRect(x+1,padT+cH-h,bW,h);
+      ctx.fillStyle='#16a34a'; ctx.font='bold 9px monospace'; ctx.textAlign='center';
+      if(weeklyReal[i]>0) ctx.fillText(Math.round(weeklyReal[i]),x+1+bW/2,padT+cH-h-5);
+    });
+
+    // Acum programado fill + line
     ctx.beginPath();
-    data.forEach((d,i)=>{ const x=padL+(i/(data.length-1||1))*cW,y=padT+cH*(1-d.acum/maxVal); i===0?ctx.moveTo(x,y):ctx.lineTo(x,y); });
-    ctx.lineTo(padL+cW,padT+cH); ctx.lineTo(padL,padT+cH); ctx.closePath();
-    ctx.fillStyle='rgba(37,99,235,0.08)'; ctx.fill();
+    data.forEach((d,i)=>{ const x=xPos(i),y=padT+cH*(1-d.acum/maxAcum); i===0?ctx.moveTo(x,y):ctx.lineTo(x,y); });
+    ctx.lineTo(xPos(n-1),padT+cH); ctx.lineTo(xPos(0),padT+cH); ctx.closePath();
+    ctx.fillStyle='rgba(37,99,235,0.06)'; ctx.fill();
     ctx.strokeStyle='#2563eb'; ctx.lineWidth=2.5; ctx.setLineDash([6,3]);
     ctx.beginPath();
-    data.forEach((d,i)=>{ const x=padL+(i/(data.length-1||1))*cW,y=padT+cH*(1-d.acum/maxVal); i===0?ctx.moveTo(x,y):ctx.lineTo(x,y); });
+    data.forEach((d,i)=>{ const x=xPos(i),y=padT+cH*(1-d.acum/maxAcum); i===0?ctx.moveTo(x,y):ctx.lineTo(x,y); });
     ctx.stroke(); ctx.setLineDash([]);
+
+    // Acum real line + dots
     const realPts=data.filter(d=>d.real!==null);
     if(realPts.length>0){
       ctx.strokeStyle='#16a34a'; ctx.lineWidth=3;
       ctx.beginPath();
-      realPts.forEach((d,i)=>{ const idx=data.indexOf(d),x=padL+(idx/(data.length-1||1))*cW,y=padT+cH*(1-d.real/maxVal); i===0?ctx.moveTo(x,y):ctx.lineTo(x,y); });
+      realPts.forEach((d,ii)=>{ const i=data.indexOf(d),x=xPos(i),y=padT+cH*(1-d.real/maxAcum); ii===0?ctx.moveTo(x,y):ctx.lineTo(x,y); });
       ctx.stroke();
       realPts.forEach(d=>{
-        const idx=data.indexOf(d),x=padL+(idx/(data.length-1||1))*cW,y=padT+cH*(1-d.real/maxVal);
-        ctx.fillStyle='#16a34a'; ctx.beginPath(); ctx.arc(x,y,6,0,Math.PI*2); ctx.fill();
-        ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(x,y,3,0,Math.PI*2); ctx.fill();
+        const i=data.indexOf(d),x=xPos(i),y=padT+cH*(1-d.real/maxAcum);
+        ctx.fillStyle='#16a34a'; ctx.beginPath(); ctx.arc(x,y,5,0,Math.PI*2); ctx.fill();
+        ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(x,y,2.5,0,Math.PI*2); ctx.fill();
         const dev=d.real-d.acum;
-        ctx.fillStyle=dev>=0?'#16a34a':'#dc2626'; ctx.font='bold 10px monospace'; ctx.textAlign='center';
-        ctx.fillText((dev>=0?"+":"")+Math.round(dev)+" m²",x,y-12);
+        ctx.fillStyle=dev>=0?'#16a34a':'#dc2626'; ctx.font='bold 9px monospace'; ctx.textAlign='center';
+        ctx.fillText((dev>=0?'+':'')+Math.round(dev),x,y-11);
       });
     }
-    ctx.setLineDash([6,3]); ctx.strokeStyle='#2563eb'; ctx.lineWidth=2;
-    ctx.beginPath(); ctx.moveTo(padL,16); ctx.lineTo(padL+30,16); ctx.stroke(); ctx.setLineDash([]);
-    ctx.fillStyle='#2563eb'; ctx.font='11px monospace'; ctx.textAlign='left'; ctx.fillText('Programado',padL+35,20);
-    ctx.strokeStyle='#16a34a'; ctx.lineWidth=2;
-    ctx.beginPath(); ctx.moveTo(padL+130,16); ctx.lineTo(padL+160,16); ctx.stroke();
-    ctx.fillStyle='#16a34a'; ctx.fillText('Real',padL+165,20);
-    ctx.fillStyle='#94a3b8'; ctx.font='10px monospace'; ctx.textAlign='center';
-    ctx.fillText('Semana',padL+cW/2,H-5);
-    ctx.save(); ctx.translate(14,padT+cH/2); ctx.rotate(-Math.PI/2); ctx.fillText('m² acumulados',0,0); ctx.restore();
+
+    // Legend
+    const ly=16;
+    ctx.fillStyle='rgba(147,197,253,0.8)'; ctx.fillRect(padL,ly,11,9);
+    ctx.fillStyle='#64748b'; ctx.font='10px monospace'; ctx.textAlign='left'; ctx.fillText('Prog. sem.',padL+15,ly+8);
+    ctx.fillStyle='rgba(74,222,128,0.85)'; ctx.fillRect(padL+88,ly,11,9);
+    ctx.fillStyle='#64748b'; ctx.fillText('Real sem.',padL+103,ly+8);
+    ctx.strokeStyle='#2563eb'; ctx.lineWidth=2; ctx.setLineDash([5,3]);
+    ctx.beginPath(); ctx.moveTo(padL+180,ly+4); ctx.lineTo(padL+200,ly+4); ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle='#2563eb'; ctx.fillText('Acum. prog.',padL+204,ly+8);
+    ctx.strokeStyle='#16a34a'; ctx.lineWidth=2.5;
+    ctx.beginPath(); ctx.moveTo(padL+298,ly+4); ctx.lineTo(padL+318,ly+4); ctx.stroke();
+    ctx.fillStyle='#16a34a'; ctx.fillText('Acum. real',padL+322,ly+8);
+
+    // Axis labels
+    ctx.fillStyle='#64748b'; ctx.font='10px monospace'; ctx.textAlign='center';
+    ctx.fillText('Semana',padL+cW/2,H-3);
+    ctx.save(); ctx.translate(12,padT+cH/2); ctx.rotate(-Math.PI/2);
+    ctx.fillStyle='#2563eb'; ctx.fillText('m² acumulado',0,0); ctx.restore();
+    ctx.save(); ctx.translate(W-10,padT+cH/2); ctx.rotate(Math.PI/2);
+    ctx.fillStyle='#94a3b8'; ctx.fillText('m² semanal',0,0); ctx.restore();
   },[data]);
-  return <canvas id="curvaSMain" ref={canvasRef} style={{ width:"100%",maxWidth:780,height:320,display:"block",margin:"0 auto" }}/>;
+  return <canvas id="curvaSMain" ref={canvasRef} style={{ width:"100%",maxWidth:820,height:360,display:"block",margin:"0 auto" }}/>;
 }
 
 // ── Shared Components ─────────────────────────────────────────────────────────
