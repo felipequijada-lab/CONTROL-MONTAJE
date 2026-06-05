@@ -1788,7 +1788,9 @@ function CurvaS({ data }) {
       ctx.fillText(i*500, padL-8, y+4);
     }
 
-    const xPos=(i)=>padL+(n<=1?cW/2:(i/(n-1))*cW);
+    // xPos: add inner margin so bars never overflow outside chart area
+    const innerPad = Math.max(20, cW/(n*2));
+    const xPos=(i)=>padL+innerPad+(n<=1?cW-innerPad*2:((cW-innerPad*2)/(n<=1?1:n-1))*i);
     data.forEach((d,i)=>{
       const x=xPos(i);
       ctx.strokeStyle='#f1f5f9'; ctx.lineWidth=1;
