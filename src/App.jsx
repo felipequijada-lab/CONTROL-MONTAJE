@@ -1751,7 +1751,7 @@ function CurvaS({ data }) {
     const ctx=canvas.getContext('2d');
     ctx.scale(dpr,dpr);
     const W=rect.width, H=rect.height;
-    const padL=64, padR=64, padT=36, padB=52;
+    const padL=80, padR=64, padT=36, padB=52;
     const cW=W-padL-padR, cH=H-padT-padB;
     const n=data.length; if(n===0) return;
 
