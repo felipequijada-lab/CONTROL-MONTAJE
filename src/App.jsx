@@ -785,8 +785,35 @@ function AdminPanel({ obras, onBack, onObraCreated, setError, onViewObra }) {
             </div>
             {programaRows.length>0&&(
               <table style={{ width:"100%",borderCollapse:"collapse",fontSize:11,marginTop:16 }}>
-                <thead><tr><Th>SEMANA</Th><Th>m² PROG.</Th></tr></thead>
-                <tbody key="prog-rows">{programaRows.map((r,i)=><tr key={i} style={{ borderBottom:"1px solid #f1f5f9" }}><Td accent="#d97706">{r.semana}</Td><Td>{r.meta}</Td></tr>)}</tbody>
+                <thead><tr><Th>SEMANA</Th><Th>m² PROG.</Th><Th>ACCIÓN</Th></tr></thead>
+                <tbody key="prog-rows">
+                  {programaRows.map((r)=>(
+                    <tr key={r.id} style={{ borderBottom:"1px solid #f1f5f9" }}>
+                      <Td accent="#d97706">{r.semana}</Td>
+                      <td style={{ padding:"7px 8px" }}>
+                        {editingRow===r.id
+                          ? <input type="number" defaultValue={r.meta} onChange={e=>r._meta=e.target.value} style={{ ...inp,margin:0,width:100 }}/>
+                          : <span style={{ color:"#475569" }}>{r.meta}</span>
+                        }
+                      </td>
+                      <td style={{ padding:"7px 8px" }}>
+                        <div style={{ display:"flex",gap:6 }}>
+                          {editingRow===r.id ? (
+                            <>
+                              <button onClick={()=>guardarEdicion(r)} style={{ background:"#dcfce7",color:"#16a34a",border:"none",borderRadius:4,padding:"3px 8px",cursor:"pointer",fontSize:10 }}>✓ Guardar</button>
+                              <button onClick={()=>setEditingRow(null)} style={{ background:"#f1f5f9",color:"#64748b",border:"none",borderRadius:4,padding:"3px 8px",cursor:"pointer",fontSize:10 }}>✕</button>
+                            </>
+                          ) : (
+                            <>
+                              <button onClick={()=>setEditingRow(r.id)} style={{ background:"#fef3c7",color:"#d97706",border:"none",borderRadius:4,padding:"3px 8px",cursor:"pointer",fontSize:10 }}>✏ Editar</button>
+                              <button onClick={()=>eliminarPrograma(r.id)} style={{ background:"#fee2e2",color:"#dc2626",border:"none",borderRadius:4,padding:"3px 8px",cursor:"pointer",fontSize:10 }}>✕</button>
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
               </table>
             )}
           </Panel>
