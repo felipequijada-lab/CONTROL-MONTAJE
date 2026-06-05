@@ -1227,7 +1227,7 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
       </div>
       {/* Tabs */}
       <div style={{ display:"flex", background:"#f8fafc", borderBottom:"1px solid #cbd5e1", padding:"0 28px" }}>
-        {[["registro","▷ REGISTRO"],["elementos","◈ ELEMENTOS"],["historial","◫ HISTORIAL"],["semanal","◷ SEMANAL"],["curvaS","↗ CURVA S"]].map(([k,l])=>(
+        {[["registro","▷ REGISTRO"],["elementos","◈ ELEMENTOS"],["historial","◫ HISTORIAL"],["semanal","◷ SEMANAL"],["curvaS","↗ GRÁFICOS"]].map(([k,l])=>(
           <button key={k} onClick={()=>setActiveTab(k)} style={{ background:"none",border:"none",cursor:"pointer",padding:"12px 16px",color:activeTab===k?"#d97706":"#64748b",borderBottom:activeTab===k?"2px solid #d97706":"2px solid transparent",fontFamily:"'DM Mono',monospace",fontSize:11 }}>{l}</button>
         ))}
       </div>
@@ -1558,7 +1558,10 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
         {/* ── CURVA S ── */}
         {activeTab==="curvaS" && (
           <div>
-            <Panel title="CURVA S — AVANCE PROGRAMADO vs REAL">
+            <Panel title="m² DESPACHADOS Y MONTADOS — SEMANA ACTUAL">
+              <BarrasSemanales dailyStats={dailyStats} elements={elements}/>
+            </Panel>
+            <Panel title="CURVA S — AVANCE PROGRAMADO vs REAL (registros aprobados)">
               {programaAcum.length===0?(
                 <div style={{ color:"#94a3b8",fontSize:12,textAlign:"center",padding:40 }}>
                   No hay programa cargado.<br/><span style={{ fontSize:10 }}>El admin puede ingresarlo desde Panel Admin → Programa Semanal.</span>
@@ -1595,6 +1598,139 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+
+// ── Barras Semanales ──────────────────────────────────────────────────────────
+function BarrasSemanales({ dailyStats, elements }) {
+  const canvasRef = useRef();
+
+  // Get current week days (Mon-Sun)
+  const weekDays = useMemo(() => {
+    const today = new Date();
+    const day = today.getDay(); // 0=Sun
+    const monday = new Date(today);
+    monday.setDate(today.getDate() - (day===0?6:day-1));
+    const days = [];
+    for(let i=0;i<7;i++){
+      const d = new Date(monday);
+      d.setDate(monday.getDate()+i);
+      days.push(d.toISOString().slice(0,10));
+    }
+    return days;
+  }, []);
+
+  const dayLabels = ["Lun","Mar","Mié","Jue","Vie","Sáb","Dom"];
+
+  const data = useMemo(() => {
+    return weekDays.map((date, i) => {
+      const dayLogs = dailyStats.find(d=>d.date===date);
+      return {
+        date,
+        label: dayLabels[i],
+        montados: dayLogs ? dayLogs.areaTotal : 0,
+        recibidos: dayLogs ? dayLogs.areaRecibida : 0,
+        isToday: date === new Date().toISOString().slice(0,10),
+        hasDat: !!dayLogs,
+      };
+    });
+  }, [weekDays, dailyStats]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const W=canvas.width, H=canvas.height;
+    const padL=55, padR=20, padT=30, padB=45;
+    const cW=W-padL-padR, cH=H-padT-padB;
+    const maxVal = Math.max(...data.flatMap(d=>[d.montados,d.recibidos]), 100);
+
+    ctx.clearRect(0,0,W,H);
+    ctx.fillStyle='#f8fafc'; ctx.fillRect(0,0,W,H);
+
+    // Grid lines
+    for(let i=0;i<=4;i++){
+      const y=padT+(cH/4)*i;
+      ctx.strokeStyle='#e2e8f0'; ctx.lineWidth=1;
+      ctx.beginPath(); ctx.moveTo(padL,y); ctx.lineTo(padL+cW,y); ctx.stroke();
+      ctx.fillStyle='#64748b'; ctx.font='10px monospace'; ctx.textAlign='right';
+      ctx.fillText(Math.round(maxVal*(1-i/4)),padL-6,y+4);
+    }
+
+    // Bars
+    const barW = (cW/7)*0.35;
+    const gap  = (cW/7)*0.08;
+
+    data.forEach((d,i) => {
+      const x = padL + (i/7)*cW + (cW/7)*0.12;
+
+      // Today highlight
+      if(d.isToday){
+        ctx.fillStyle='rgba(251,191,36,0.08)';
+        ctx.fillRect(padL+(i/7)*cW, padT, cW/7, cH);
+      }
+
+      // Recibidos bar (blue)
+      if(d.recibidos>0){
+        const bh = (d.recibidos/maxVal)*cH;
+        ctx.fillStyle='#3b82f6';
+        ctx.fillRect(x, padT+cH-bh, barW, bh);
+        ctx.fillStyle='#2563eb';
+        ctx.font='bold 9px monospace'; ctx.textAlign='center';
+        ctx.fillText(Math.round(d.recibidos), x+barW/2, padT+cH-bh-4);
+      }
+
+      // Montados bar (green)
+      if(d.montados>0){
+        const bh = (d.montados/maxVal)*cH;
+        ctx.fillStyle='#22c55e';
+        ctx.fillRect(x+barW+gap, padT+cH-bh, barW, bh);
+        ctx.fillStyle='#16a34a';
+        ctx.font='bold 9px monospace'; ctx.textAlign='center';
+        ctx.fillText(Math.round(d.montados), x+barW+gap+barW/2, padT+cH-bh-4);
+      }
+
+      // X label
+      ctx.fillStyle = d.isToday?'#d97706':'#64748b';
+      ctx.font = d.isToday?'bold 11px monospace':'11px monospace';
+      ctx.textAlign='center';
+      ctx.fillText(d.label, padL+(i/7)*cW+(cW/14), padT+cH+16);
+      ctx.font='9px monospace'; ctx.fillStyle='#94a3b8';
+      ctx.fillText(d.date.slice(5), padL+(i/7)*cW+(cW/14), padT+cH+28);
+    });
+
+    // Legend
+    ctx.fillStyle='#3b82f6'; ctx.fillRect(padL,12,12,10);
+    ctx.fillStyle='#64748b'; ctx.font='10px monospace'; ctx.textAlign='left';
+    ctx.fillText('Despachados m²',padL+16,21);
+    ctx.fillStyle='#22c55e'; ctx.fillRect(padL+140,12,12,10);
+    ctx.fillStyle='#64748b'; ctx.fillText('Montados m²',padL+156,21);
+
+    // Y label
+    ctx.save(); ctx.translate(12,padT+cH/2); ctx.rotate(-Math.PI/2);
+    ctx.fillStyle='#94a3b8'; ctx.font='10px monospace'; ctx.textAlign='center';
+    ctx.fillText('m²', 0, 0); ctx.restore();
+
+  }, [data]);
+
+  const totRec = data.reduce((s,d)=>s+d.recibidos,0);
+  const totMon = data.reduce((s,d)=>s+d.montados,0);
+
+  return (
+    <div>
+      <div style={{ display:"flex",gap:12,marginBottom:12,flexWrap:"wrap" }}>
+        <div style={{ background:"#dbeafe",border:"1px solid #2563eb33",borderRadius:8,padding:"10px 20px",textAlign:"center" }}>
+          <div style={{ fontSize:9,color:"#2563eb",letterSpacing:2 }}>DESPACHADOS SEMANA</div>
+          <div style={{ fontSize:20,fontFamily:"'Archivo Black',sans-serif",color:"#2563eb" }}>{Math.round(totRec)} m²</div>
+        </div>
+        <div style={{ background:"#dcfce7",border:"1px solid #16a34a33",borderRadius:8,padding:"10px 20px",textAlign:"center" }}>
+          <div style={{ fontSize:9,color:"#16a34a",letterSpacing:2 }}>MONTADOS SEMANA</div>
+          <div style={{ fontSize:20,fontFamily:"'Archivo Black',sans-serif",color:"#16a34a" }}>{Math.round(totMon)} m²</div>
+        </div>
+      </div>
+      <canvas ref={canvasRef} width={780} height={260} style={{ width:"100%",maxWidth:780,display:"block" }}/>
     </div>
   );
 }
