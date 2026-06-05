@@ -59,7 +59,7 @@ function generatePDF(weekData, elements, dailyStats, weekLabel, obraName, progra
   const incidencias = dailyStats.filter(d=>getWeekNumber(d.date)===weekLabel);
 
   const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"/>
-<style>*{margin:0;padding:0;box-sizing:border-box;}body{font-family:'Courier New',monospace;background:#e2e8f0;color:#1e293b;padding:20px;}.header{background:#fff;border:1px solid #cbd5e1;border-radius:8px;padding:16px 20px;display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;}.title{color:#d97706;font-size:18px;font-weight:bold;}.kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:12px;}.kpi{background:#fff;border:1px solid #cbd5e1;border-radius:6px;padding:10px;text-align:center;}.kpi-label{color:#94a3b8;font-size:8px;letter-spacing:1px;margin-bottom:4px;}.kpi-value{font-size:16px;font-weight:bold;}.section{background:#fff;border:1px solid #cbd5e1;border-radius:6px;margin-bottom:12px;}.section-title{color:#d97706;font-size:9px;letter-spacing:3px;padding:10px 14px;border-bottom:1px solid #cbd5e1;}table{width:100%;border-collapse:collapse;}th{background:#f1f5f9;color:#64748b;font-size:8px;letter-spacing:1px;padding:5px 8px;text-align:left;}td{padding:5px 8px;font-size:9px;color:#475569;border-bottom:1px solid #f1f5f9;}.amber{color:#d97706;}.green{color:#16a34a;}.blue{color:#2563eb;}.footer{text-align:center;color:#94a3b8;font-size:8px;margin-top:16px;border-top:1px solid #cbd5e1;padding-top:8px;}@media print{body{background:#fff!important;}}</style>
+<style>*{margin:0;padding:0;box-sizing:border-box;}body{font-family:'Courier New',monospace;background:#e2e8f0;color:#1e293b;padding:20px;}.header{background:#fff;border:1px solid #cbd5e1;border-radius:8px;padding:16px 20px;display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;}.title{color:#d97706;font-size:18px;font-weight:bold;}.kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:12px;}.kpi{background:#fff;border:1px solid #cbd5e1;border-radius:6px;padding:10px;text-align:center;}.kpi-label{color:#94a3b8;font-size:8px;letter-spacing:1px;margin-bottom:4px;}.kpi-value{font-size:16px;font-weight:bold;}.section{background:#fff;border:1px solid #cbd5e1;border-radius:6px;margin-bottom:12px;page-break-inside:avoid;}.section-title{color:#d97706;font-size:9px;letter-spacing:3px;padding:10px 14px;border-bottom:1px solid #cbd5e1;}table{width:100%;border-collapse:collapse;border-spacing:0;}th{background:#f1f5f9;color:#64748b;font-size:8px;letter-spacing:1px;padding:5px 8px;text-align:left;}td{padding:5px 8px;font-size:9px;color:#475569;border-bottom:1px solid #f1f5f9;}tr{page-break-inside:avoid;}thead{display:table-header-group;}.amber{color:#d97706;}.green{color:#16a34a;}.blue{color:#2563eb;}.footer{text-align:center;color:#94a3b8;font-size:8px;margin-top:16px;border-top:1px solid #cbd5e1;padding-top:8px;}@media print{body{background:#fff!important;}}</style>
 </head><body>
 <div class="header"><div><div class="title">◈ CONTROL DE MONTAJE</div><div style="color:#94a3b8;font-size:10px;letter-spacing:2px;margin-top:4px">BAUMAX SPA · ${obraName} · SEMANA ${weekLabel}</div></div><div style="text-align:right"><div style="color:#94a3b8;font-size:9px">FECHA</div><div style="font-size:12px;font-weight:bold">${fecha}</div></div></div>
 <div class="kpis">
@@ -104,7 +104,7 @@ ${programaAcum&&programaAcum.length>0?`<div class="section"><div class="section-
 ${incidencias.map(d=>`<tr><td class="amber">${d.date}</td><td>${d.note||"Sin incidencias"}</td></tr>`).join('')}
 ${incidencias.length===0?'<tr><td colspan="2" style="text-align:center;color:#94a3b8">Sin incidencias</td></tr>':''}
 </table></div>
-<div class="section"><div class="section-title">ELEMENTOS MONTADOS — SEMANA ${weekLabel}</div><table>
+<div class="section" style="page-break-before:always;"><div class="section-title">ELEMENTOS MONTADOS — SEMANA ${weekLabel}</div><table>
 <tr><th>LOTE</th><th>TORRE</th><th>PISO</th><th>TIPO</th><th>POSICIÓN</th><th>ÁREA m²</th><th>FECHA</th></tr>
 ${weekElements.map(el=>`<tr><td>${el.lote||""}</td><td>${el.torre||""}</td><td>${el.piso||""}</td><td class="${TIPOS_MD.includes(el.tipo)?"green":"blue"}">${el.tipo}</td><td>${el.pos}</td><td>${fmt2(el.area)}</td><td>${el.fecha}</td></tr>`).join('')}
 <tr style="background:#f1f5f9"><td colspan="5"><b>TOTAL</b></td><td class="amber"><b>${fmt2(weekData.areaTotal)} m²</b></td><td></td></tr>
@@ -413,7 +413,11 @@ function AdminPanel({ obras, onBack, onObraCreated, setError, onViewObra }) {
   const [obraId, setObraId] = useState(obras.filter(o=>o.estado!=="cerrada")[0]?.id||"");
   const [uploadStatus, setUploadStatus] = useState("");
   const [programa, setPrograma] = useState({ obra_id:obras[0]?.id||"", semana:"", meta:"" });
+  const [programaObra, setProgramaObra] = useState(obras[0]?.id||"");
   const [programaRows, setProgramaRows] = useState([]);
+  const [editingRow, setEditingRow] = useState(null);
+  const [newSemana, setNewSemana] = useState("");
+  const [newMeta, setNewMeta] = useState("");
   const [adminStats, setAdminStats] = useState([]);
   const [weekColumns, setWeekColumns] = useState([]);
   const [loadingStats, setLoadingStats] = useState(false);
@@ -426,7 +430,36 @@ function AdminPanel({ obras, onBack, onObraCreated, setError, onViewObra }) {
     if(tab==="resumen") loadAdminStats();
     if(tab==="aprobacion") loadPendingRegs();
     if(tab==="usuarios") loadUsuarios();
+    if(tab==="programa") loadPrograma();
   },[tab,obras]);
+
+  useEffect(()=>{
+    if(tab==="programa") loadPrograma();
+  },[programaObra]);
+
+  async function loadPrograma() {
+    if(!programaObra) return;
+    try {
+      const rows = await sbFetch(`programa?obra_id=eq.${programaObra}&select=*&order=semana.asc`);
+      setProgramaRows(rows);
+    } catch(e){ setError("Error: "+e.message); }
+  }
+
+  async function guardarEdicion(row) {
+    try {
+      await sbFetch(`programa?id=eq.${row.id}`,{method:"PATCH",body:JSON.stringify({meta:parseFloat(row._meta||row.meta)}),headers:{"Prefer":"return=minimal"}});
+      setEditingRow(null);
+      loadPrograma();
+    } catch(e){ setError("Error: "+e.message); }
+  }
+
+  async function eliminarPrograma(id) {
+    if(!window.confirm("¿Eliminar esta semana del programa?")) return;
+    try {
+      await sbFetch(`programa?id=eq.${id}`,{method:"DELETE",headers:{"Prefer":"return=minimal"}});
+      loadPrograma();
+    } catch(e){ setError("Error: "+e.message); }
+  }
 
   async function loadPendingRegs() {
     try {
@@ -591,11 +624,11 @@ function AdminPanel({ obras, onBack, onObraCreated, setError, onViewObra }) {
   }
 
   async function agregarPrograma() {
-    if(!programa.obra_id||!programa.semana||!programa.meta) return;
+    if(!programaObra||!newSemana||!newMeta) return;
     try {
-      await sbFetch("programa",{method:"POST",body:JSON.stringify({obra_id:programa.obra_id,semana:programa.semana,meta:parseFloat(programa.meta)})});
-      setProgramaRows(prev=>[...prev,{...programa}]);
-      setPrograma(p=>({...p,semana:"",meta:""}));
+      await sbFetch("programa",{method:"POST",body:JSON.stringify({obra_id:programaObra,semana:newSemana,meta:parseFloat(newMeta)})});
+      setNewSemana(""); setNewMeta("");
+      loadPrograma();
     } catch(e){ setError("Error: "+e.message); }
   }
 
