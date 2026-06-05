@@ -1760,21 +1760,25 @@ function CurvaS({ data }) {
     const maxAcumRaw = Math.max(...data.map(d=>Math.max(d.acum,d.real||0)),100);
     const maxWeekRaw = Math.max(...weeklyProg,...weeklyReal.filter(v=>v!==null),10);
     const maxAcum = Math.ceil(maxAcumRaw/2500)*2500;
-    const maxWeek = Math.ceil(maxWeekRaw/2500)*2500;
+    const maxWeek = Math.ceil(maxWeekRaw/500)*500;
 
     ctx.clearRect(0,0,W,H); ctx.fillStyle='#f8fafc'; ctx.fillRect(0,0,W,H);
 
-    const numTicks = Math.round(maxAcum/2500);
-    for(let i=0;i<=numTicks;i++){
-      const y=padT+cH*(1-i/numTicks);
+    // Draw grid based on acum ticks (2500 intervals) — right axis
+    const numTicksAcum = Math.round(maxAcum/2500);
+    for(let i=0;i<=numTicksAcum;i++){
+      const y=padT+cH*(1-i/numTicksAcum);
       ctx.strokeStyle='#e2e8f0'; ctx.lineWidth=1;
       ctx.beginPath(); ctx.moveTo(padL,y); ctx.lineTo(padL+cW,y); ctx.stroke();
-      // Left axis = semanal (bars)
+      ctx.fillStyle='#2563eb'; ctx.font='10px monospace'; ctx.textAlign='left';
+      ctx.fillText(i*2500,padL+cW+6,y+4);
+    }
+    // Left axis ticks (500 intervals) — no extra grid lines
+    const numTicksWeek = Math.round(maxWeek/500);
+    for(let i=0;i<=numTicksWeek;i++){
+      const y=padT+cH*(1-i/numTicksWeek);
       ctx.fillStyle='#475569'; ctx.font='10px monospace'; ctx.textAlign='right';
-      ctx.fillText(Math.round(maxWeek*(i/numTicks)),padL-6,y+4);
-      // Right axis = acumulado (lines)
-      ctx.fillStyle='#2563eb'; ctx.textAlign='left';
-      ctx.fillText(Math.round(maxAcum*(i/numTicks)),padL+cW+6,y+4);
+      ctx.fillText(i*500,padL-6,y+4);
     }
 
     const xPos=(i)=>padL+(n<=1?cW/2:(i/(n-1))*cW);
