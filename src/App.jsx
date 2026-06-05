@@ -146,7 +146,7 @@ function generateFullPDF(elements, dailyStats, weeklyStats, programaAcum, obraNa
   const pctMounted = totalArea>0?(mountedArea/totalArea)*100:0;
 
   const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"/>
-<style>*{margin:0;padding:0;box-sizing:border-box;}body{font-family:'Courier New',monospace;background:#e2e8f0;color:#1e293b;padding:20px;}.header{background:#fff;border:1px solid #cbd5e1;border-radius:8px;padding:16px 20px;display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;}.title{color:#d97706;font-size:18px;font-weight:bold;}.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px;}.kpi{background:#fff;border:1px solid #cbd5e1;border-radius:6px;padding:10px;text-align:center;}.kpi-label{color:#94a3b8;font-size:8px;letter-spacing:1px;margin-bottom:4px;}.kpi-value{font-size:18px;font-weight:bold;}.section{background:#fff;border:1px solid #cbd5e1;border-radius:6px;margin-bottom:12px;page-break-inside:avoid;}.section-title{color:#d97706;font-size:9px;letter-spacing:3px;padding:10px 14px;border-bottom:1px solid #cbd5e1;}table{width:100%;border-collapse:collapse;}th{background:#f1f5f9;color:#64748b;font-size:8px;padding:5px 8px;text-align:left;}td{padding:5px 8px;font-size:9px;color:#475569;border-bottom:1px solid #f1f5f9;}.amber{color:#d97706;}.green{color:#16a34a;}.blue{color:#2563eb;}.footer{text-align:center;color:#94a3b8;font-size:8px;margin-top:16px;border-top:1px solid #cbd5e1;padding-top:8px;}@media print{body{background:#fff!important;}}</style>
+<style>*{margin:0;padding:0;box-sizing:border-box;}body{font-family:'Courier New',monospace;background:#e2e8f0;color:#1e293b;padding:20px;}.header{background:#fff;border:1px solid #cbd5e1;border-radius:8px;padding:16px 20px;display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;}.title{color:#d97706;font-size:18px;font-weight:bold;}.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px;}.kpi{background:#fff;border:1px solid #cbd5e1;border-radius:6px;padding:10px;text-align:center;}.kpi-label{color:#94a3b8;font-size:8px;letter-spacing:1px;margin-bottom:4px;}.kpi-value{font-size:18px;font-weight:bold;}.section{background:#fff;border:1px solid #cbd5e1;border-radius:6px;margin-bottom:12px;page-break-inside:avoid;}.section-title{color:#d97706;font-size:9px;letter-spacing:3px;padding:10px 14px;border-bottom:1px solid #cbd5e1;}table{width:100%;border-collapse:collapse;}th{background:#f1f5f9;color:#64748b;font-size:8px;padding:5px 8px;text-align:left;}td{padding:5px 8px;font-size:9px;color:#475569;border-bottom:1px solid #f1f5f9;}tr{page-break-inside:avoid;}.amber{color:#d97706;}.green{color:#16a34a;}.blue{color:#2563eb;}.footer{text-align:center;color:#94a3b8;font-size:8px;margin-top:16px;border-top:1px solid #cbd5e1;padding-top:8px;}@media print{body{background:#fff!important;}}</style>
 </head><body>
 <div class="header"><div><div class="title">◈ REPORTE COMPLETO DE OBRA</div><div style="color:#94a3b8;font-size:10px;letter-spacing:2px;margin-top:4px">BAUMAX SPA · ${obraName}</div></div><div style="text-align:right"><div style="color:#94a3b8;font-size:9px">GENERADO</div><div style="font-size:12px;font-weight:bold">${fecha}</div></div></div>
 <div class="kpis">
@@ -1792,23 +1792,32 @@ function CurvaS({ data }) {
       ctx.fillText(d.semana.split('.')[1],x,padT+cH+28);
     });
 
-    const bW=Math.max(5,(cW/(n||1))*0.16);
+    // Bar width based on available space per week
+    const slotW = cW/(n||1);
+    const bW = Math.max(8, slotW*0.22);
+    const bGap = Math.max(2, slotW*0.04);
 
-    // Bars programado semanal (orange to differentiate from blue cumulative line)
+    // Bars programado semanal (orange)
     data.forEach((d,i)=>{
-      const x=xPos(i), h=(weeklyProg[i]/maxWeek)*cH;
-      ctx.fillStyle='rgba(251,146,60,0.6)'; // orange
-      ctx.fillRect(x-bW-1,padT+cH-h,bW,h);
+      const cx=xPos(i);
+      const h=(weeklyProg[i]/maxWeek)*cH;
+      const x=cx - bGap/2 - bW;
+      ctx.fillStyle='rgba(251,146,60,0.65)';
+      ctx.fillRect(x, padT+cH-h, bW, h);
+      ctx.fillStyle='#ea580c'; ctx.font='bold 9px monospace'; ctx.textAlign='center';
+      if(weeklyProg[i]>0) ctx.fillText(Math.round(weeklyProg[i]), x+bW/2, padT+cH-h-4);
     });
 
-    // Bars real semanal
+    // Bars real semanal (green)
     data.forEach((d,i)=>{
-      if(weeklyReal[i]===null||weeklyReal[i]<0) return;
-      const x=xPos(i), h=(weeklyReal[i]/maxWeek)*cH;
+      if(weeklyReal[i]===null||weeklyReal[i]<=0) return;
+      const cx=xPos(i);
+      const h=(weeklyReal[i]/maxWeek)*cH;
+      const x=cx + bGap/2;
       ctx.fillStyle='rgba(74,222,128,0.85)';
-      ctx.fillRect(x+1,padT+cH-h,bW,h);
+      ctx.fillRect(x, padT+cH-h, bW, h);
       ctx.fillStyle='#16a34a'; ctx.font='bold 9px monospace'; ctx.textAlign='center';
-      if(weeklyReal[i]>0) ctx.fillText(Math.round(weeklyReal[i]),x+1+bW/2,padT+cH-h-5);
+      ctx.fillText(Math.round(weeklyReal[i]), x+bW/2, padT+cH-h-4);
     });
 
     // Acum programado fill + line
