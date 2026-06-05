@@ -1757,21 +1757,24 @@ function CurvaS({ data }) {
 
     const weeklyProg = data.map((d,i)=> d.acum-(i>0?data[i-1].acum:0));
     const weeklyReal = data.map((d,i)=> d.real!==null?(d.real-(i>0&&data[i-1].real!==null?data[i-1].real:0)):null);
-    const maxAcum = Math.max(...data.map(d=>Math.max(d.acum,d.real||0)),100);
-    const maxWeek = Math.max(...weeklyProg,...weeklyReal.filter(v=>v!==null),10);
+    const maxAcumRaw = Math.max(...data.map(d=>Math.max(d.acum,d.real||0)),100);
+    const maxWeekRaw = Math.max(...weeklyProg,...weeklyReal.filter(v=>v!==null),10);
+    const maxAcum = Math.ceil(maxAcumRaw/2500)*2500;
+    const maxWeek = Math.ceil(maxWeekRaw/2500)*2500;
 
     ctx.clearRect(0,0,W,H); ctx.fillStyle='#f8fafc'; ctx.fillRect(0,0,W,H);
 
-    for(let i=0;i<=4;i++){
-      const y=padT+(cH/4)*i;
+    const numTicks = Math.round(maxAcum/2500);
+    for(let i=0;i<=numTicks;i++){
+      const y=padT+cH*(1-i/numTicks);
       ctx.strokeStyle='#e2e8f0'; ctx.lineWidth=1;
       ctx.beginPath(); ctx.moveTo(padL,y); ctx.lineTo(padL+cW,y); ctx.stroke();
       // Left axis = semanal (bars)
       ctx.fillStyle='#475569'; ctx.font='10px monospace'; ctx.textAlign='right';
-      ctx.fillText(Math.round(maxWeek*(1-i/4)),padL-6,y+4);
+      ctx.fillText(Math.round(maxWeek*(i/numTicks)),padL-6,y+4);
       // Right axis = acumulado (lines)
       ctx.fillStyle='#2563eb'; ctx.textAlign='left';
-      ctx.fillText(Math.round(maxAcum*(1-i/4)),padL+cW+6,y+4);
+      ctx.fillText(Math.round(maxAcum*(i/numTicks)),padL+cW+6,y+4);
     }
 
     const xPos=(i)=>padL+(n<=1?cW/2:(i/(n-1))*cW);
