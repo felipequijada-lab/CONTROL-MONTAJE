@@ -1797,15 +1797,13 @@ function CurvaS({ data }) {
     const bW = Math.max(8, slotW*0.22);
     const bGap = Math.max(2, slotW*0.04);
 
-    // Bars programado semanal (orange)
+    // Bars programado semanal (orange) - draw bars first, then labels
     data.forEach((d,i)=>{
       const cx=xPos(i);
       const h=(weeklyProg[i]/maxWeek)*cH;
       const x=cx - bGap/2 - bW;
       ctx.fillStyle='rgba(251,146,60,0.65)';
       ctx.fillRect(x, padT+cH-h, bW, h);
-      ctx.fillStyle='#ea580c'; ctx.font='bold 9px monospace'; ctx.textAlign='center';
-      if(weeklyProg[i]>0) ctx.fillText(Math.round(weeklyProg[i]), x+bW/2, padT+cH-h-4);
     });
 
     // Bars real semanal (green)
@@ -1816,8 +1814,25 @@ function CurvaS({ data }) {
       const x=cx + bGap/2;
       ctx.fillStyle='rgba(74,222,128,0.85)';
       ctx.fillRect(x, padT+cH-h, bW, h);
-      ctx.fillStyle='#16a34a'; ctx.font='bold 9px monospace'; ctx.textAlign='center';
-      ctx.fillText(Math.round(weeklyReal[i]), x+bW/2, padT+cH-h-4);
+    });
+
+    // Labels on left axis area - aligned with bar height, won't be covered
+    data.forEach((d,i)=>{
+      const cx=xPos(i);
+      // Prog label aligned with top of orange bar
+      if(weeklyProg[i]>0){
+        const h=(weeklyProg[i]/maxWeek)*cH;
+        const y=padT+cH-h;
+        ctx.fillStyle='#ea580c'; ctx.font='bold 9px monospace'; ctx.textAlign='right';
+        ctx.fillText(Math.round(weeklyProg[i]), padL-8, y+4);
+      }
+      // Real label aligned with top of green bar
+      if(weeklyReal[i]!==null&&weeklyReal[i]>0){
+        const h=(weeklyReal[i]/maxWeek)*cH;
+        const y=padT+cH-h;
+        ctx.fillStyle='#16a34a'; ctx.font='bold 9px monospace'; ctx.textAlign='right';
+        ctx.fillText(Math.round(weeklyReal[i]), padL-8, y+4);
+      }
     });
 
     // Acum programado fill + line
