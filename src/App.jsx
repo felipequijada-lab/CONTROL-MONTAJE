@@ -1751,7 +1751,7 @@ function CurvaS({ data }) {
     const ctx=canvas.getContext('2d');
     ctx.scale(dpr,dpr);
     const W=rect.width, H=rect.height;
-    const padL=80, padR=64, padT=36, padB=52;
+    const padL=90, padR=70, padT=36, padB=52;
     const cW=W-padL-padR, cH=H-padT-padB;
     const n=data.length; if(n===0) return;
 
@@ -1773,12 +1773,19 @@ function CurvaS({ data }) {
       ctx.fillStyle='#2563eb'; ctx.font='10px monospace'; ctx.textAlign='left';
       ctx.fillText(i*2500,padL+cW+6,y+4);
     }
-    // Left axis ticks (500 intervals) — no extra grid lines
+    // Left axis ticks (500 intervals) — draw line + labels well outside bars
     const numTicksWeek = Math.round(maxWeek/500);
+    // Draw left axis line
+    ctx.strokeStyle='#cbd5e1'; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(padL,padT); ctx.lineTo(padL,padT+cH); ctx.stroke();
     for(let i=0;i<=numTicksWeek;i++){
       const y=padT+cH*(1-i/numTicksWeek);
+      // Tick mark
+      ctx.strokeStyle='#cbd5e1'; ctx.lineWidth=1;
+      ctx.beginPath(); ctx.moveTo(padL-4,y); ctx.lineTo(padL,y); ctx.stroke();
+      // Label
       ctx.fillStyle='#475569'; ctx.font='10px monospace'; ctx.textAlign='right';
-      ctx.fillText(i*500,padL-6,y+4);
+      ctx.fillText(i*500, padL-8, y+4);
     }
 
     const xPos=(i)=>padL+(n<=1?cW/2:(i/(n-1))*cW);
@@ -1816,22 +1823,20 @@ function CurvaS({ data }) {
       ctx.fillRect(x, padT+cH-h, bW, h);
     });
 
-    // Labels on left axis area - aligned with bar height, won't be covered
+    // Bar value labels - draw inside bar near top, small and unobtrusive
     data.forEach((d,i)=>{
       const cx=xPos(i);
-      // Prog label aligned with top of orange bar
       if(weeklyProg[i]>0){
         const h=(weeklyProg[i]/maxWeek)*cH;
-        const y=padT+cH-h;
-        ctx.fillStyle='#ea580c'; ctx.font='bold 9px monospace'; ctx.textAlign='right';
-        ctx.fillText(Math.round(weeklyProg[i]), padL-8, y+4);
+        const x=cx - bGap/2 - bW;
+        ctx.fillStyle='rgba(120,53,15,0.8)'; ctx.font='8px monospace'; ctx.textAlign='center';
+        ctx.fillText(Math.round(weeklyProg[i]), x+bW/2, padT+cH-h+10);
       }
-      // Real label aligned with top of green bar
       if(weeklyReal[i]!==null&&weeklyReal[i]>0){
         const h=(weeklyReal[i]/maxWeek)*cH;
-        const y=padT+cH-h;
-        ctx.fillStyle='#16a34a'; ctx.font='bold 9px monospace'; ctx.textAlign='right';
-        ctx.fillText(Math.round(weeklyReal[i]), padL-8, y+4);
+        const x=cx + bGap/2;
+        ctx.fillStyle='rgba(20,83,45,0.9)'; ctx.font='8px monospace'; ctx.textAlign='center';
+        ctx.fillText(Math.round(weeklyReal[i]), x+bW/2, padT+cH-h+10);
       }
     });
 
