@@ -179,12 +179,12 @@ ${weekElements.map(el=>`<tr><td>${el.lote||""}</td><td>${el.torre||""}</td><td>$
       const chk=(e)=>montPos.has(e.torre+'__'+e.piso+'__'+e.pos+'__'+e.tipo)||montPos.has(e.pos+'__'+e.tipo)||montPos.has(e.pos);
       
       let html='<table style="border-collapse:separate;border-spacing:3px;font-size:10px"><thead><tr><th style="width:30px"></th>';
-      torres.forEach(t=>{ html+=\`<th colspan="2" style="text-align:center;font-weight:bold;font-size:12px;padding-bottom:4px">\${t}</th>\`; });
+      torres.forEach(t=>{ html+='<th colspan="2" style="text-align:center;font-weight:bold;font-size:12px;padding-bottom:4px">'+t+'</th>'; });
       html+='</tr><tr><th></th>';
-      torres.forEach(t=>tipos.forEach(tip=>{ html+=\`<th style="text-align:center;color:\${tip==='MD'?'#16a34a':'#2563eb'};font-size:8px">\${tip}</th>\`; }));
+      torres.forEach(t=>tipos.forEach(tip=>{ html+='<th style="text-align:center;color:'+(tip==='MD'?'#16a34a':'#2563eb')+';font-size:8px">'+tip+'</th>'; }));
       html+='</tr></thead><tbody>';
       pisos.forEach(piso=>{
-        html+=\`<tr><td style="color:#64748b;font-weight:bold;padding-right:8px;text-align:right">P\${piso}</td>\`;
+        html+='<tr><td style="color:#64748b;font-weight:bold;padding-right:8px;text-align:right">P'+piso+'</td>';
         torres.forEach(t=>tipos.forEach(tipo=>{
           const elems=allElements.filter(e=>e.torre===t&&String(e.piso)===String(piso)&&e.tipo===tipo);
           if(elems.length===0){html+='<td></td>';return;}
@@ -193,7 +193,7 @@ ${weekElements.map(el=>`<tr><td>${el.lote||""}</td><td>${el.torre||""}</td><td>$
           const bg=pct===1?'#16a34a':pct>0?'#86efac':'#e2e8f0';
           const color=pct===1?'#fff':pct>0?'#166534':'#94a3b8';
           const label=pct===1?'✓':pct>0?'~':'';
-          html+=\`<td style="padding:1px"><div style="width:26px;height:18px;background:\${bg};border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:9px;color:\${color};font-weight:bold">\${label}</div></td>\`;
+          html+='<td style="padding:1px"><div style="width:26px;height:18px;background:'+bg+';border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:9px;color:'+color+';font-weight:bold">'+label+'</div></td>';
         }));
         html+='</tr>';
       });
@@ -2079,3 +2079,4 @@ function MiniStat({label,value,color,small}) { return <div style={{ marginBottom
 const btnPrimary   = { background:"#d97706",color:"#fff",border:"none",borderRadius:6,padding:"8px 16px",cursor:"pointer",fontFamily:"'DM Mono',monospace",fontSize:11,letterSpacing:1 };
 const btnSecondary = { background:"#f1f5f9",color:"#475569",border:"1px solid #cbd5e1",borderRadius:6,padding:"8px 14px",cursor:"pointer",fontFamily:"'DM Mono',monospace",fontSize:11 };
 const inp = { width:"100%",padding:"7px 9px",background:"#f8fafc",border:"1px solid #cbd5e1",borderRadius:5,color:"#1e293b",fontFamily:"'DM Mono',monospace",fontSize:11,boxSizing:"border-box" };
+                                                            
