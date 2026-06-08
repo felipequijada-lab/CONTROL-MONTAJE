@@ -148,19 +148,23 @@ ${weekElements.map(el=>`<tr><td>${el.lote||""}</td><td>${el.torre||""}</td><td>$
       const W=bc.width, H=bc.height;
       const padL=50,padR=20,padT=20,padB=35,cW=W-padL-padR,cH=H-padT-padB;
       ctx.fillStyle='#f8fafc'; ctx.fillRect(0,0,W,H);
-      const weekDays = weekData.days || dailyStats.filter(d=>getWeekNumber(d.date)===weekLabel);
+      const weekDaysRaw = weekData.days || dailyStats.filter(d=>getWeekNumber(d.date)===weekLabel);
+      const weekDays = [...weekDaysRaw].sort((a,b)=>a.date.localeCompare(b.date)); // ascending
       const maxVal = Math.max(...weekDays.map(d=>Math.max(d.areaTotal||0,d.areaRecibida||0)),100);
       const bW = Math.max(8,(cW/Math.max(weekDays.length,1))*0.2);
       const gap = 2;
       weekDays.forEach((d,i)=>{
         const x = padL+(i/(Math.max(weekDays.length-1,1)))*cW;
+        // Format date as DD/MM
+        const parts = (d.date||'').split('-');
+        const dateLabel = parts.length===3 ? parts[2]+'/'+parts[1] : d.date;
         // Recibidos bar
         if(d.areaRecibida>0){const h=(d.areaRecibida/maxVal)*cH;ctx.fillStyle='rgba(59,130,246,0.7)';ctx.fillRect(x-bW-gap,padT+cH-h,bW,h);}
         // Montados bar
         if(d.areaTotal>0){const h=(d.areaTotal/maxVal)*cH;ctx.fillStyle='rgba(34,197,94,0.85)';ctx.fillRect(x+gap,padT+cH-h,bW,h);ctx.fillStyle='#166534';ctx.font='bold 9px monospace';ctx.textAlign='center';ctx.fillText(Math.round(d.areaTotal),x+gap+bW/2,padT+cH-h-3);}
-        // X label
+        // X label DD/MM
         ctx.fillStyle='#64748b';ctx.font='9px monospace';ctx.textAlign='center';
-        ctx.fillText(d.date?.slice(5)||'',x,padT+cH+14);
+        ctx.fillText(dateLabel,x,padT+cH+14);
       });
       // Grid
       for(let i=0;i<=4;i++){const y=padT+(cH/4)*i;ctx.strokeStyle='#e2e8f0';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(padL,y);ctx.lineTo(padL+cW,y);ctx.stroke();ctx.fillStyle='#94a3b8';ctx.font='9px monospace';ctx.textAlign='right';ctx.fillText(Math.round(maxVal*(1-i/4)),padL-4,y+3);}
@@ -192,8 +196,8 @@ ${weekElements.map(el=>`<tr><td>${el.lote||""}</td><td>${el.torre||""}</td><td>$
           const pct=mounted.length/elems.length;
           const bg=pct===1?'#16a34a':pct>0?'#86efac':'#e2e8f0';
           const color=pct===1?'#fff':pct>0?'#166534':'#94a3b8';
-          const label=pct===1?'✓':pct>0?'~':'';
-          html+='<td style="padding:1px"><div style="width:26px;height:18px;background:'+bg+';border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:9px;color:'+color+';font-weight:bold">'+label+'</div></td>';
+          const label=pct===1?'OK':pct>0?'>>':'';
+          html+='<td style="padding:1px"><div style="width:28px;height:18px;background:'+bg+';border-radius:3px;display:inline-flex;align-items:center;justify-content:center;font-size:8px;font-family:monospace;color:'+color+';font-weight:bold">'+label+'</div></td>';
         }));
         html+='</tr>';
       });
@@ -2079,4 +2083,3 @@ function MiniStat({label,value,color,small}) { return <div style={{ marginBottom
 const btnPrimary   = { background:"#d97706",color:"#fff",border:"none",borderRadius:6,padding:"8px 16px",cursor:"pointer",fontFamily:"'DM Mono',monospace",fontSize:11,letterSpacing:1 };
 const btnSecondary = { background:"#f1f5f9",color:"#475569",border:"1px solid #cbd5e1",borderRadius:6,padding:"8px 14px",cursor:"pointer",fontFamily:"'DM Mono',monospace",fontSize:11 };
 const inp = { width:"100%",padding:"7px 9px",background:"#f8fafc",border:"1px solid #cbd5e1",borderRadius:5,color:"#1e293b",fontFamily:"'DM Mono',monospace",fontSize:11,boxSizing:"border-box" };
-                                                            
