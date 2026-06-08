@@ -1188,7 +1188,9 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
 
   function handleSort(col){ if(sortCol===col) setSortDir(d=>d==="asc"?"desc":"asc"); else{setSortCol(col);setSortDir("asc");} }
 
-  const currentWeekData = weeklyStats.find(w=>w.week===selectedWeek);
+  // Auto-select most recent week if selectedWeek has no data
+  const currentWeekData = weeklyStats.find(w=>w.week===selectedWeek) || weeklyStats[0];
+  const effectiveWeek = currentWeekData?.week || selectedWeek;
 
   // Count pending actions
   const pendingCount = Object.values(elementActions).filter(v=>v!==null).length;
@@ -1526,7 +1528,7 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
             <div style={{ display:"flex",gap:12,alignItems:"flex-end",marginBottom:16,flexWrap:"wrap" }}>
               <div>
                 <Label>Semana seleccionada</Label>
-                <select value={selectedWeek} onChange={e=>setSelectedWeek(e.target.value)} style={{ ...inp,width:"auto",margin:0 }}>
+                <select value={effectiveWeek} onChange={e=>setSelectedWeek(e.target.value)} style={{ ...inp,width:"auto",margin:0 }}>
                   {weeklyStats.map(w=><option key={w.week} value={w.week}>{w.week}</option>)}
                   {weeklyStats.length===0&&<option value={getWeekNumber(TODAY)}>{getWeekNumber(TODAY)}</option>}
                 </select>
@@ -1576,7 +1578,7 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
               <div style={{ display:"flex",gap:10,flexWrap:"wrap",alignItems:"center" }}>
                 <div>
                   <div style={{ fontSize:9,color:"#64748b",letterSpacing:1,marginBottom:4 }}>SEMANA</div>
-                  <select value={selectedWeek} onChange={e=>setSelectedWeek(e.target.value)} style={{ ...inp,width:"auto",margin:0 }}>
+                  <select value={effectiveWeek} onChange={e=>setSelectedWeek(e.target.value)} style={{ ...inp,width:"auto",margin:0 }}>
                     {weeklyStats.map(w=><option key={w.week} value={w.week}>{w.week}</option>)}
                     {weeklyStats.length===0&&<option value={getWeekNumber(TODAY)}>{getWeekNumber(TODAY)}</option>}
                   </select>
@@ -1584,8 +1586,14 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
                 <div style={{ display:"flex",flexDirection:"column",gap:4 }}>
                   <div style={{ fontSize:9,color:"#64748b",letterSpacing:1,marginBottom:2 }}>INFORME SEMANAL</div>
                   <div style={{ display:"flex",gap:8 }}>
-                    <button onClick={()=>{ if(!currentWeekData){alert("Sin datos para esta semana");return;} generatePDF(currentWeekData,elements,dailyStats,selectedWeek,obra.nombre,programaAcum); }} style={{ ...btnPrimary,background:"#d97706" }}>↓ PDF SEMANAL</button>
-                    <button onClick={()=>{ if(!currentWeekData){alert("Sin datos para esta semana");return;} generateExcel(currentWeekData,elements,dailyStats,selectedWeek); }} style={{ ...btnPrimary,background:"#16a34a" }}>↓ EXCEL SEMANAL</button>
+                    <button onClick={()=>{ 
+                      if(!currentWeekData){
+                        const hasPendingThisWeek = dailyStats.some(d=>!d.aprobado&&getWeekNumber(d.date)===selectedWeek);
+                        alert(hasPendingThisWeek ? "La semana "+selectedWeek+" tiene registros pendientes de aprobación. El admin debe aprobarlos primero." : "No hay registros aprobados para la semana "+selectedWeek);
+                        return;
+                      } 
+                      generatePDF(currentWeekData,elements,dailyStats,effectiveWeek,obra.nombre,programaAcum); }} style={{ ...btnPrimary,background:"#d97706" }}>↓ PDF SEMANAL</button>
+                    <button onClick={()=>{ if(!currentWeekData){alert("Sin datos para esta semana");return;} generateExcel(currentWeekData,elements,dailyStats,effectiveWeek); }} style={{ ...btnPrimary,background:"#16a34a" }}>↓ EXCEL SEMANAL</button>
                   </div>
                 </div>
                 <div style={{ width:1,background:"#cbd5e1",height:48,margin:"0 4px" }}/>
@@ -1611,7 +1619,7 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
 function PlanoAvance({ elements, montadosPos }) {
   // Get unique torres and pisos from data, sorted
   const torres = [...new Set(elements.map(e=>e.torre).filter(Boolean))].sort();
-  const pisos  = [...new Set(elements.map(e=>e.piso).filter(Boolean))].sort((a,b)=>Number(a)-Number(b));
+  const pisos  = [...new Set(elements.map(e=>e.piso).filter(Boolean))].sort((a,b)=>Number(b)-Number(a)); // P4 top, P1 bottom
   const TIPOS  = ['MD','P'];
 
   if(torres.length===0) return <div style={{ color:"#94a3b8",fontSize:12 }}>Sin elementos cargados.</div>;
