@@ -1137,7 +1137,7 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
       map[week].recibidos.push(...d.recibidos);
     });
     return Object.values(map).map(w=>{
-      const diasEfectivos=w.days.filter(d=>d.areaTotal>0).length;
+      const diasEfectivos=Math.min(5, w.days.filter(d=>d.areaTotal>0).length);
       const areaTotal=w.days.reduce((s,d)=>s+d.areaTotal,0);
       const areaMD=w.days.reduce((s,d)=>s+d.areaMD,0);
       const areaP=w.days.reduce((s,d)=>s+d.areaP,0);
@@ -1561,6 +1561,9 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
             <Panel title="m² DESPACHADOS Y MONTADOS — SEMANA ACTUAL">
               <BarrasSemanales dailyStats={dailyStats} elements={elements}/>
             </Panel>
+            <Panel title="PLANO DE AVANCE — TORRES Y PISOS">
+              <PlanoAvance elements={elements} montadosPos={montadosPos}/>
+            </Panel>
             <Panel title="CURVA S — AVANCE PROGRAMADO vs REAL (registros aprobados)">
               {programaAcum.length===0?(
                 <div style={{ color:"#94a3b8",fontSize:12,textAlign:"center",padding:40 }}>
@@ -1602,6 +1605,90 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
   );
 }
 
+
+
+// ── Plano de Avance ───────────────────────────────────────────────────────────
+function PlanoAvance({ elements, montadosPos }) {
+  // Get unique torres and pisos from data, sorted
+  const torres = [...new Set(elements.map(e=>e.torre).filter(Boolean))].sort();
+  const pisos  = [...new Set(elements.map(e=>e.piso).filter(Boolean))].sort((a,b)=>Number(a)-Number(b));
+  const TIPOS  = ['MD','P'];
+
+  if(torres.length===0) return <div style={{ color:"#94a3b8",fontSize:12 }}>Sin elementos cargados.</div>;
+
+  function getCellStatus(torre, piso, tipo) {
+    const elems = elements.filter(e=>e.torre===torre&&String(e.piso)===String(piso)&&e.tipo===tipo);
+    if(elems.length===0) return 'empty';
+    const mounted = elems.filter(e=>
+      montadosPos.has(`${e.torre}__${e.piso}__${e.pos}__${e.tipo}`)||
+      montadosPos.has(`${e.pos}__${e.tipo}`)||
+      montadosPos.has(e.pos)
+    );
+    const pct = mounted.length/elems.length;
+    if(pct===0) return 'pendiente';
+    if(pct===1) return 'completo';
+    return 'parcial';
+  }
+
+  const cellStyle = (status) => ({
+    width:28, height:20, borderRadius:3, display:'inline-flex', alignItems:'center', justifyContent:'center',
+    fontSize:9, fontFamily:"'DM Mono',monospace", fontWeight:'bold',
+    background: status==='completo'?'#16a34a': status==='parcial'?'#86efac': status==='empty'?'transparent':'#e2e8f0',
+    color: status==='completo'?'#fff': status==='parcial'?'#166534':'#94a3b8',
+    border: `1px solid ${status==='completo'?'#15803d':status==='parcial'?'#4ade80':status==='empty'?'transparent':'#cbd5e1'}`,
+  });
+
+  return (
+    <div style={{ overflowX:'auto' }}>
+      <table style={{ borderCollapse:'separate', borderSpacing:3, fontSize:10 }}>
+        <thead>
+          <tr>
+            <th style={{ width:40, textAlign:'left', color:'#94a3b8', fontSize:9, paddingBottom:4 }}>PISO</th>
+            {torres.map(t=>(
+              <th key={t} colSpan={2} style={{ textAlign:'center', color:'#1e293b', fontSize:13, fontWeight:'bold', paddingBottom:4, minWidth:62 }}>
+                {t}
+              </th>
+            ))}
+          </tr>
+          <tr>
+            <th/>
+            {torres.map(t=>TIPOS.map(tip=>(
+              <th key={`${t}-${tip}`} style={{ textAlign:'center', color:tip==='MD'?'#16a34a':'#2563eb', fontSize:8, paddingBottom:6, width:28 }}>{tip}</th>
+            )))}
+          </tr>
+        </thead>
+        <tbody>
+          {pisos.map(piso=>(
+            <tr key={piso}>
+              <td style={{ color:'#64748b', fontSize:10, fontWeight:'bold', paddingRight:8, textAlign:'right' }}>P{piso}</td>
+              {torres.map(t=>TIPOS.map(tipo=>{
+                const status = getCellStatus(t, piso, tipo);
+                return (
+                  <td key={`${t}-${piso}-${tipo}`} style={{ padding:1 }}>
+                    <div style={cellStyle(status)}>
+                      {status==='completo'?'✓': status==='parcial'?'~':''}
+                    </div>
+                  </td>
+                );
+              }))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <div style={{ display:'flex', gap:16, marginTop:12, fontSize:10, color:'#64748b' }}>
+        <div style={{ display:'flex', alignItems:'center', gap:4 }}>
+          <div style={{ width:16,height:12,background:'#16a34a',borderRadius:2 }}/> Completo (100%)
+        </div>
+        <div style={{ display:'flex', alignItems:'center', gap:4 }}>
+          <div style={{ width:16,height:12,background:'#86efac',borderRadius:2 }}/> Parcial
+        </div>
+        <div style={{ display:'flex', alignItems:'center', gap:4 }}>
+          <div style={{ width:16,height:12,background:'#e2e8f0',borderRadius:2 }}/> Pendiente
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // ── Barras Semanales ──────────────────────────────────────────────────────────
 function BarrasSemanales({ dailyStats, elements }) {
