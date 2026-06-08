@@ -44,7 +44,7 @@ const PERSONAL_CARGOS = [
 const defaultPersonal = () => ({coordinadores:1,calidad:1,lideres:1,montajistas:2,ayudantes:2});
 
 // ── PDF Semanal ───────────────────────────────────────────────────────────────
-function generatePDF(weekData, elements, dailyStats, weekLabel, obraName, programaAcum) {
+function generatePDF(weekData, elements, dailyStats, weekLabel, obraName, programaAcum, allElements) {
   const fecha = new Date().toLocaleDateString('es-CL');
   const weekElements = weekData.montados.map(key => {
     // key can be torre__piso__pos__tipo or pos__tipo or pos (backward compat)
@@ -92,6 +92,12 @@ ${(()=>{
 </div>`;
 })()}
 ${programaAcum&&programaAcum.length>0?`<div class="section"><div class="section-title">CURVA S</div><div style="padding:12px"><img id="curvaSImg" src="" style="width:100%;border-radius:4px"/></div></div>`:''}
+<div class="section" style="page-break-before:always"><div class="section-title">RENDIMIENTO DIARIO — SEMANA ${weekLabel}</div>
+<div style="padding:12px"><canvas id="barrasDiariasCanvas" width="700" height="180" style="width:100%;border-radius:4px"></canvas></div>
+</div>
+<div class="section"><div class="section-title">PLANO DE AVANCE — TORRES Y PISOS</div>
+<div style="padding:14px" id="planoAvanceSection"></div>
+</div>
 <div class="section"><div class="section-title">RENDIMIENTOS</div><table>
 <tr><th>CARGO</th><th>PERSONAS</th><th>m²/PERSONA/DÍA</th><th>m²/PERSONA/SEMANA</th></tr>
 <tr><td class="amber">Líder</td><td>${weekData.personal.lideres}</td><td>${fmt2(weekData.rendLider)}</td><td>${fmt2(weekData.rendLider*weekData.diasEfectivos)}</td></tr>
@@ -132,7 +138,78 @@ ${weekElements.map(el=>`<tr><td>${el.lote||""}</td><td>${el.torre||""}</td><td>$
   document.body.appendChild(iframe);
   const doc = iframe.contentWindow.document;
   doc.open(); doc.write(finalHtml); doc.close();
-  setTimeout(()=>{ iframe.contentWindow.focus(); iframe.contentWindow.print(); setTimeout(()=>document.body.removeChild(iframe),1000); },600);
+  setTimeout(()=>{
+    const doc2 = iframe.contentWindow.document;
+    
+    // Draw barras diarias
+    const bc = doc2.getElementById('barrasDiariasCanvas');
+    if(bc) {
+      const ctx = bc.getContext('2d');
+      const W=bc.width, H=bc.height;
+      const padL=50,padR=20,padT=20,padB=35,cW=W-padL-padR,cH=H-padT-padB;
+      ctx.fillStyle='#f8fafc'; ctx.fillRect(0,0,W,H);
+      const weekDays = weekData.days || dailyStats.filter(d=>getWeekNumber(d.date)===weekLabel);
+      const maxVal = Math.max(...weekDays.map(d=>Math.max(d.areaTotal||0,d.areaRecibida||0)),100);
+      const bW = Math.max(8,(cW/Math.max(weekDays.length,1))*0.2);
+      const gap = 2;
+      weekDays.forEach((d,i)=>{
+        const x = padL+(i/(Math.max(weekDays.length-1,1)))*cW;
+        // Recibidos bar
+        if(d.areaRecibida>0){const h=(d.areaRecibida/maxVal)*cH;ctx.fillStyle='rgba(59,130,246,0.7)';ctx.fillRect(x-bW-gap,padT+cH-h,bW,h);}
+        // Montados bar
+        if(d.areaTotal>0){const h=(d.areaTotal/maxVal)*cH;ctx.fillStyle='rgba(34,197,94,0.85)';ctx.fillRect(x+gap,padT+cH-h,bW,h);ctx.fillStyle='#166534';ctx.font='bold 9px monospace';ctx.textAlign='center';ctx.fillText(Math.round(d.areaTotal),x+gap+bW/2,padT+cH-h-3);}
+        // X label
+        ctx.fillStyle='#64748b';ctx.font='9px monospace';ctx.textAlign='center';
+        ctx.fillText(d.date?.slice(5)||'',x,padT+cH+14);
+      });
+      // Grid
+      for(let i=0;i<=4;i++){const y=padT+(cH/4)*i;ctx.strokeStyle='#e2e8f0';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(padL,y);ctx.lineTo(padL+cW,y);ctx.stroke();ctx.fillStyle='#94a3b8';ctx.font='9px monospace';ctx.textAlign='right';ctx.fillText(Math.round(maxVal*(1-i/4)),padL-4,y+3);}
+      // Legend
+      ctx.fillStyle='rgba(59,130,246,0.7)';ctx.fillRect(padL,8,10,8);ctx.fillStyle='#64748b';ctx.font='9px monospace';ctx.textAlign='left';ctx.fillText('Despachados',padL+14,15);
+      ctx.fillStyle='rgba(34,197,94,0.85)';ctx.fillRect(padL+90,8,10,8);ctx.fillStyle='#64748b';ctx.fillText('Montados',padL+104,15);
+    }
+
+    // Draw plano de avance
+    const planoDiv = doc2.getElementById('planoAvanceSection');
+    if(planoDiv && allElements) {
+      const torres=[...new Set(allElements.map(e=>e.torre).filter(Boolean))].sort();
+      const pisos=[...new Set(allElements.map(e=>e.piso).filter(Boolean))].sort((a,b)=>Number(b)-Number(a));
+      const tipos=['MD','P'];
+      const montPos=new Set(dailyStats.filter(d=>d.aprobado).flatMap(d=>d.montados));
+      const chk=(e)=>montPos.has(e.torre+'__'+e.piso+'__'+e.pos+'__'+e.tipo)||montPos.has(e.pos+'__'+e.tipo)||montPos.has(e.pos);
+      
+      let html='<table style="border-collapse:separate;border-spacing:3px;font-size:10px"><thead><tr><th style="width:30px"></th>';
+      torres.forEach(t=>{ html+=\`<th colspan="2" style="text-align:center;font-weight:bold;font-size:12px;padding-bottom:4px">\${t}</th>\`; });
+      html+='</tr><tr><th></th>';
+      torres.forEach(t=>tipos.forEach(tip=>{ html+=\`<th style="text-align:center;color:\${tip==='MD'?'#16a34a':'#2563eb'};font-size:8px">\${tip}</th>\`; }));
+      html+='</tr></thead><tbody>';
+      pisos.forEach(piso=>{
+        html+=\`<tr><td style="color:#64748b;font-weight:bold;padding-right:8px;text-align:right">P\${piso}</td>\`;
+        torres.forEach(t=>tipos.forEach(tipo=>{
+          const elems=allElements.filter(e=>e.torre===t&&String(e.piso)===String(piso)&&e.tipo===tipo);
+          if(elems.length===0){html+='<td></td>';return;}
+          const mounted=elems.filter(e=>chk(e));
+          const pct=mounted.length/elems.length;
+          const bg=pct===1?'#16a34a':pct>0?'#86efac':'#e2e8f0';
+          const color=pct===1?'#fff':pct>0?'#166534':'#94a3b8';
+          const label=pct===1?'✓':pct>0?'~':'';
+          html+=\`<td style="padding:1px"><div style="width:26px;height:18px;background:\${bg};border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:9px;color:\${color};font-weight:bold">\${label}</div></td>\`;
+        }));
+        html+='</tr>';
+      });
+      html+='</tbody></table>';
+      html+='<div style="display:flex;gap:16px;margin-top:8px;font-size:9px;color:#64748b">';
+      html+='<span><span style="display:inline-block;width:12px;height:10px;background:#16a34a;border-radius:2px;margin-right:4px"></span>Completo</span>';
+      html+='<span><span style="display:inline-block;width:12px;height:10px;background:#86efac;border-radius:2px;margin-right:4px"></span>Parcial</span>';
+      html+='<span><span style="display:inline-block;width:12px;height:10px;background:#e2e8f0;border-radius:2px;margin-right:4px"></span>Pendiente</span>';
+      html+='</div>';
+      planoDiv.innerHTML=html;
+    }
+
+    iframe.contentWindow.focus();
+    iframe.contentWindow.print();
+    setTimeout(()=>document.body.removeChild(iframe),1000);
+  },800);
 }
 
 // ── PDF Completo ──────────────────────────────────────────────────────────────
@@ -1592,7 +1669,7 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
                         alert(hasPendingThisWeek ? "La semana "+selectedWeek+" tiene registros pendientes de aprobación. El admin debe aprobarlos primero." : "No hay registros aprobados para la semana "+selectedWeek);
                         return;
                       } 
-                      generatePDF(currentWeekData,elements,dailyStats,effectiveWeek,obra.nombre,programaAcum); }} style={{ ...btnPrimary,background:"#d97706" }}>↓ PDF SEMANAL</button>
+                      generatePDF(currentWeekData,elements,dailyStats,effectiveWeek,obra.nombre,programaAcum,elements); }} style={{ ...btnPrimary,background:"#d97706" }}>↓ PDF SEMANAL</button>
                     <button onClick={()=>{ if(!currentWeekData){alert("Sin datos para esta semana");return;} generateExcel(currentWeekData,elements,dailyStats,effectiveWeek); }} style={{ ...btnPrimary,background:"#16a34a" }}>↓ EXCEL SEMANAL</button>
                   </div>
                 </div>
