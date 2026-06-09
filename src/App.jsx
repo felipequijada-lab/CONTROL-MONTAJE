@@ -1883,7 +1883,9 @@ function BarrasSemanales({ dailyStats, elements }) {
       ctx.textAlign='center';
       ctx.fillText(d.label, padL+(i/7)*cW+(cW/14), padT+cH+16);
       ctx.font='9px monospace'; ctx.fillStyle='#94a3b8';
-      ctx.fillText(d.date.slice(5), padL+(i/7)*cW+(cW/14), padT+cH+28);
+      const dp=d.date.split('-');
+      const meses=['','ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+      ctx.fillText(dp[2]+' '+meses[parseInt(dp[1])], padL+(i/7)*cW+(cW/14), padT+cH+28);
     });
 
     // Legend
