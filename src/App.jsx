@@ -2104,11 +2104,11 @@ function CurvaS({ data }) {
       ctx.beginPath(); ctx.moveTo(x,padT); ctx.lineTo(x,padT+cH); ctx.stroke();
       // Calculate week start date (Monday) for label
       const [wNum,wYear]=d.semana.split('.').map(Number);
-      // ISO week: find first Monday of year, then add weeks
-      const jan4=new Date(wYear,0,4); // Jan 4 is always in week 1
-      const dayOfWeek=jan4.getDay()||7; // 1=Mon..7=Sun
+      // ISO week: Jan 4 is always in week 1, weeks start Monday
+      const jan4=new Date(wYear,0,4);
+      const dayOfWeek=jan4.getDay()||7;
       const week1Mon=new Date(jan4.getTime()-(dayOfWeek-1)*86400000);
-      const weekStart=new Date(week1Mon.getTime()+(wNum-1)*7*86400000);
+      const weekStart=new Date(week1Mon.getTime()+(wNum-1)*7*86400000+86400000); // +1 day fix
       const dd=String(weekStart.getDate()).padStart(2,'0');
       const meses=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
       const mmNombre=meses[weekStart.getMonth()];
