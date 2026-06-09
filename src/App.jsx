@@ -1410,6 +1410,7 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
         </div>
         <div style={{ display:"flex", gap:6, flexWrap:"wrap", alignItems:"center" }}>
           <KPIBox label="RECIBIDOS" value={fmtPct(pctRec)} sub={fmt2(stats.areaReceived)+" m²"} color="#2563eb"/>
+          <KPIBox label="STOCK EN OBRA" value={elements.filter(e=>getEstado(`${e.torre}__${e.piso}__${e.pos}__${e.tipo}`)==="recibido").length+" elem"} sub={fmt2(elements.filter(e=>getEstado(`${e.torre}__${e.piso}__${e.pos}__${e.tipo}`)==="recibido").reduce((s,e)=>s+e.area,0))+" m²"} color="#f59e0b"/>
           <KPIBox label="MD/MDT" value={fmtPct(pctMD)} sub={fmt2(stats.md.areaMounted)+"/"+fmt2(stats.md.areaTotal)+" m²"} color="#16a34a"/>
           <KPIBox label="PRELOSAS" value={fmtPct(pctP)} sub={fmt2(stats.p.areaMounted)+"/"+fmt2(stats.p.areaTotal)+" m²"} color="#2563eb"/>
           <KPIBox label="AVANCE TOTAL" value={fmtPct(pctAll)} sub={fmt2(stats.all.areaMounted)+"/"+fmt2(stats.all.areaTotal)+" m²"} color="#d97706" large/>
@@ -2103,8 +2104,11 @@ function CurvaS({ data }) {
       ctx.beginPath(); ctx.moveTo(x,padT); ctx.lineTo(x,padT+cH); ctx.stroke();
       // Calculate week start date (Monday) for label
       const [wNum,wYear]=d.semana.split('.').map(Number);
-      const jan1=new Date(wYear,0,1);
-      const weekStart=new Date(jan1.getTime()+((wNum-1)*7-(jan1.getDay()||7)+1)*86400000);
+      // ISO week: find first Monday of year, then add weeks
+      const jan4=new Date(wYear,0,4); // Jan 4 is always in week 1
+      const dayOfWeek=jan4.getDay()||7; // 1=Mon..7=Sun
+      const week1Mon=new Date(jan4.getTime()-(dayOfWeek-1)*86400000);
+      const weekStart=new Date(week1Mon.getTime()+(wNum-1)*7*86400000);
       const dd=String(weekStart.getDate()).padStart(2,'0');
       const meses=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
       const mmNombre=meses[weekStart.getMonth()];
