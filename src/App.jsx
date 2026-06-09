@@ -82,9 +82,14 @@ function generatePDF(weekData, elements, dailyStats, weekLabel, obraName, progra
 ${(()=>{
   const prog = programaAcum && programaAcum.find(p=>p.semana===weekLabel);
   if(!prog) return '';
-  const programado = prog.acum - (programaAcum[programaAcum.indexOf(prog)-1]?.acum||0);
+  const progIdx = programaAcum.indexOf(prog);
+  const programado = prog.acum - (progIdx>0?programaAcum[progIdx-1].acum:0);
+  // real includes carryover from previous weeks surplus/deficit
+  const prevReal = progIdx>0 ? (programaAcum[progIdx-1].real||0) : 0;
+  const prevAcumProg = progIdx>0 ? programaAcum[progIdx-1].acum : 0;
+  const carryover = prevReal - prevAcumProg; // positive = superávit previo
   const real = weekData.areaTotal;
-  const diff = real - programado;
+  const diff = real - programado + carryover; // include prior surplus/deficit
   const pct = programado>0 ? (diff/programado)*100 : 0;
   const color = diff>=0 ? '#16a34a' : '#dc2626';
   const label = diff>=0 ? 'SUPERÁVIT' : 'DÉFICIT';
@@ -218,7 +223,7 @@ ${weekElements.map(el=>`<tr><td>${el.lote||""}</td><td>${el.torre||""}</td><td>$
           const pct=mounted.length/elems.length;
           const bg=pct===1?'#16a34a':pct>0?'#86efac':'#e2e8f0';
           const color=pct===1?'#fff':pct>0?'#166534':'#94a3b8';
-          const label=pct===1?'OK':pct>0?'>>':'';
+          const label=pct===1?'\u2713':pct>0?'~':'';
           html+='<td style="padding:1px"><div style="width:28px;height:18px;background:'+bg+';border-radius:3px;display:inline-flex;align-items:center;justify-content:center;font-size:8px;font-family:monospace;color:'+color+';font-weight:bold">'+label+'</div></td>';
         }));
         html+='</tr>';
@@ -236,26 +241,35 @@ ${weekElements.map(el=>`<tr><td>${el.lote||""}</td><td>${el.torre||""}</td><td>$
     function drawDonut(canvasId, pct, label, color) {
       const c = doc2.getElementById(canvasId);
       if(!c) return;
+      const dpr = 2; // force 2x for crisp PDF
+      const size = 160;
+      c.width = size*dpr; c.height = size*dpr;
+      c.style.width = size+'px'; c.style.height = size+'px';
       const ctx2 = c.getContext('2d');
-      const cx=90, cy=90, r=72, rIn=48;
-      ctx2.clearRect(0,0,180,180);
-      // Background arc
+      ctx2.scale(dpr,dpr);
+      const cx=size/2, cy=size/2, r=size*0.44, rIn=size*0.28;
+      ctx2.clearRect(0,0,size,size);
+      // Background circle
       ctx2.beginPath(); ctx2.arc(cx,cy,r,0,Math.PI*2);
-      ctx2.fillStyle='#f1f5f9'; ctx2.fill();
+      ctx2.fillStyle='#e2e8f0'; ctx2.fill();
       // Value arc
-      const angle = (pct/100)*Math.PI*2 - Math.PI/2;
-      ctx2.beginPath(); ctx2.moveTo(cx,cy);
-      ctx2.arc(cx,cy,r,-Math.PI/2,angle);
-      ctx2.closePath(); ctx2.fillStyle=color; ctx2.fill();
-      // Inner circle (donut hole)
+      const startAngle = -Math.PI/2;
+      const endAngle = startAngle + (pct/100)*Math.PI*2;
+      ctx2.beginPath();
+      ctx2.moveTo(cx,cy);
+      ctx2.arc(cx,cy,r,startAngle,endAngle);
+      ctx2.closePath();
+      ctx2.fillStyle=color; ctx2.fill();
+      // Inner circle
       ctx2.beginPath(); ctx2.arc(cx,cy,rIn,0,Math.PI*2);
       ctx2.fillStyle='#fff'; ctx2.fill();
       // % text
-      ctx2.fillStyle='#1e293b'; ctx2.font='bold 22px monospace'; ctx2.textAlign='center'; ctx2.textBaseline='middle';
-      ctx2.fillText(Math.round(pct)+'%', cx, cy-8);
-      // label text
-      ctx2.fillStyle='#64748b'; ctx2.font='10px monospace';
-      ctx2.fillText(label, cx, cy+12);
+      ctx2.fillStyle='#1e293b'; ctx2.font='bold 20px monospace';
+      ctx2.textAlign='center'; ctx2.textBaseline='middle';
+      ctx2.fillText(Math.round(pct)+'%', cx, cy-6);
+      // m² text
+      ctx2.fillStyle='#64748b'; ctx2.font='9px monospace';
+      ctx2.fillText(label, cx, cy+10);
     }
 
     // Calculate totals from elements
@@ -1567,12 +1581,27 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
             </div>
             <div style={{ display:"flex",gap:6,marginBottom:14,flexWrap:"wrap" }}>
               <input placeholder="Buscar…" value={filterSearch} onChange={e=>{setFilterSearch(e.target.value);setElemPage(0);}} style={{ ...inp,width:160,margin:0 }}/>
-              <select value={filterLote}   onChange={e=>setFilterLote(e.target.value)}   style={{ ...inp,margin:0,width:"auto" }}>{lotes.map(t=><option key={t} value={t}>{t==="TODOS"?"Lote: Todos":t}</option>)}</select>
-              <select value={filterTorre}  onChange={e=>setFilterTorre(e.target.value)}  style={{ ...inp,margin:0,width:"auto" }}>{torres.map(t=><option key={t} value={t}>{t==="TODAS"?"Torre: Todas":t}</option>)}</select>
-              <select value={filterPiso}   onChange={e=>setFilterPiso(e.target.value)}   style={{ ...inp,margin:0,width:"auto" }}>{pisos.map(t=><option key={t} value={t}>{t==="TODOS"?"Piso: Todos":t}</option>)}</select>
-              <select value={filterTipo}   onChange={e=>setFilterTipo(e.target.value)}   style={{ ...inp,margin:0,width:"auto" }}>{["TODOS","MD","MDT","P"].map(t=><option key={t} value={t}>{t==="TODOS"?"Tipo: Todos":t}</option>)}</select>
-              <select value={filterEstado} onChange={e=>setFilterEstado(e.target.value)} style={{ ...inp,margin:0,width:"auto" }}>{["TODOS","pendiente","recibido","montado"].map(t=><option key={t} value={t}>{t==="TODOS"?"Estado: Todos":t.charAt(0).toUpperCase()+t.slice(1)}</option>)}</select>
+              <select value={filterLote}   onChange={e=>{setFilterLote(e.target.value);setElemPage(0);}}   style={{ ...inp,margin:0,width:"auto" }}>{lotes.map(t=><option key={t} value={t}>{t==="TODOS"?"Lote: Todos":t}</option>)}</select>
+              <select value={filterTorre}  onChange={e=>{setFilterTorre(e.target.value);setElemPage(0);}}  style={{ ...inp,margin:0,width:"auto" }}>{torres.map(t=><option key={t} value={t}>{t==="TODAS"?"Torre: Todas":t}</option>)}</select>
+              <select value={filterPiso}   onChange={e=>{setFilterPiso(e.target.value);setElemPage(0);}}   style={{ ...inp,margin:0,width:"auto" }}>{pisos.map(t=><option key={t} value={t}>{t==="TODOS"?"Piso: Todos":t}</option>)}</select>
+              <select value={filterTipo}   onChange={e=>{setFilterTipo(e.target.value);setElemPage(0);}}   style={{ ...inp,margin:0,width:"auto" }}>{["TODOS","MD","MDT","P"].map(t=><option key={t} value={t}>{t==="TODOS"?"Tipo: Todos":t}</option>)}</select>
+              <select value={filterEstado} onChange={e=>{setFilterEstado(e.target.value);setElemPage(0);}} style={{ ...inp,margin:0,width:"auto" }}>{["TODOS","pendiente","recibido","montado"].map(t=><option key={t} value={t}>{t==="TODOS"?"Estado: Todos":t.charAt(0).toUpperCase()+t.slice(1)}</option>)}</select>
             </div>
+            {/* Pagination controls */}
+            {filteredElements.length>ELEMS_PER_PAGE&&(
+              <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10,padding:"8px 12px",background:"#f1f5f9",borderRadius:6 }}>
+                <div style={{ fontSize:11,color:"#64748b" }}>
+                  Mostrando {elemPage*ELEMS_PER_PAGE+1}–{Math.min((elemPage+1)*ELEMS_PER_PAGE,filteredElements.length)} de {filteredElements.length} elementos
+                </div>
+                <div style={{ display:"flex",gap:6,alignItems:"center" }}>
+                  <button onClick={()=>setElemPage(0)} disabled={elemPage===0} style={{ ...btnSecondary,padding:"4px 10px",fontSize:11,opacity:elemPage===0?0.4:1 }}>«</button>
+                  <button onClick={()=>setElemPage(p=>Math.max(0,p-1))} disabled={elemPage===0} style={{ ...btnSecondary,padding:"4px 10px",fontSize:11,opacity:elemPage===0?0.4:1 }}>‹</button>
+                  <span style={{ fontSize:11,color:"#1e293b",padding:"0 8px" }}>Pág. {elemPage+1} / {Math.ceil(filteredElements.length/ELEMS_PER_PAGE)}</span>
+                  <button onClick={()=>setElemPage(p=>Math.min(Math.ceil(filteredElements.length/ELEMS_PER_PAGE)-1,p+1))} disabled={(elemPage+1)*ELEMS_PER_PAGE>=filteredElements.length} style={{ ...btnSecondary,padding:"4px 10px",fontSize:11,opacity:(elemPage+1)*ELEMS_PER_PAGE>=filteredElements.length?0.4:1 }}>›</button>
+                  <button onClick={()=>setElemPage(Math.ceil(filteredElements.length/ELEMS_PER_PAGE)-1)} disabled={(elemPage+1)*ELEMS_PER_PAGE>=filteredElements.length} style={{ ...btnSecondary,padding:"4px 10px",fontSize:11,opacity:(elemPage+1)*ELEMS_PER_PAGE>=filteredElements.length?0.4:1 }}>»</button>
+                </div>
+              </div>
+            )}
             <div style={{ overflowX:"auto" }}>
               <table style={{ width:"100%",borderCollapse:"collapse",fontSize:11 }}>
                 <thead>
