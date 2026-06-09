@@ -171,33 +171,58 @@ ${weekElements.map(el=>`<tr><td>${el.lote||""}</td><td>${el.torre||""}</td><td>$
     // Draw barras diarias
     const bc = doc2.getElementById('barrasDiariasCanvas');
     if(bc) {
+      const dpr=2;
+      bc.width=700*dpr; bc.height=200*dpr;
+      bc.style.width='700px'; bc.style.height='200px';
       const ctx = bc.getContext('2d');
-      const W=bc.width, H=bc.height;
-      const padL=50,padR=20,padT=20,padB=35,cW=W-padL-padR,cH=H-padT-padB;
+      ctx.scale(dpr,dpr);
+      const W=700, H=200;
+      const padL=50,padR=20,padT=25,padB=40,cW=W-padL-padR,cH=H-padT-padB;
       ctx.fillStyle='#f8fafc'; ctx.fillRect(0,0,W,H);
-      const weekDaysRaw = weekData.days || dailyStats.filter(d=>getWeekNumber(d.date)===weekLabel);
-      const weekDays = [...weekDaysRaw].sort((a,b)=>a.date.localeCompare(b.date)); // ascending
-      const maxVal = Math.max(...weekDays.map(d=>Math.max(d.areaTotal||0,d.areaRecibida||0)),100);
-      const bW = Math.max(8,(cW/Math.max(weekDays.length,1))*0.2);
-      const gap = 2;
-      weekDays.forEach((d,i)=>{
-        const x = padL+(i/(Math.max(weekDays.length-1,1)))*cW;
-        // Format date as DD/MM
-        const parts = (d.date||'').split('-');
-        const dateLabel = parts.length===3 ? parts[2]+'/'+parts[1] : d.date;
-        // Recibidos bar
-        if(d.areaRecibida>0){const h=(d.areaRecibida/maxVal)*cH;ctx.fillStyle='rgba(59,130,246,0.7)';ctx.fillRect(x-bW-gap,padT+cH-h,bW,h);}
-        // Montados bar
-        if(d.areaTotal>0){const h=(d.areaTotal/maxVal)*cH;ctx.fillStyle='rgba(34,197,94,0.85)';ctx.fillRect(x+gap,padT+cH-h,bW,h);ctx.fillStyle='#166534';ctx.font='bold 9px monospace';ctx.textAlign='center';ctx.fillText(Math.round(d.areaTotal),x+gap+bW/2,padT+cH-h-3);}
-        // X label DD/MM
-        ctx.fillStyle='#64748b';ctx.font='9px monospace';ctx.textAlign='center';
-        ctx.fillText(dateLabel,x,padT+cH+14);
-      });
-      // Grid
-      for(let i=0;i<=4;i++){const y=padT+(cH/4)*i;ctx.strokeStyle='#e2e8f0';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(padL,y);ctx.lineTo(padL+cW,y);ctx.stroke();ctx.fillStyle='#94a3b8';ctx.font='9px monospace';ctx.textAlign='right';ctx.fillText(Math.round(maxVal*(1-i/4)),padL-4,y+3);}
-      // Legend
-      ctx.fillStyle='rgba(59,130,246,0.7)';ctx.fillRect(padL,8,10,8);ctx.fillStyle='#64748b';ctx.font='9px monospace';ctx.textAlign='left';ctx.fillText('Despachados',padL+14,15);
-      ctx.fillStyle='rgba(34,197,94,0.85)';ctx.fillRect(padL+90,8,10,8);ctx.fillStyle='#64748b';ctx.fillText('Montados',padL+104,15);
+      const weekDaysRaw = dailyStats.filter(d=>getWeekNumber(d.date)===effectiveWeek);
+      const weekDays = [...weekDaysRaw].sort((a,b)=>a.date.localeCompare(b.date));
+      if(weekDays.length===0) { ctx.fillStyle='#94a3b8'; ctx.font='12px monospace'; ctx.textAlign='center'; ctx.fillText('Sin datos para esta semana',W/2,H/2); }
+      else {
+        const maxVal = Math.max(...weekDays.map(d=>Math.max(d.areaTotal||0,d.areaRecibida||0)),100);
+        const slotW = cW/weekDays.length;
+        const bW = Math.max(10, slotW*0.22);
+        const gap = 3;
+        // Grid
+        for(let i=0;i<=4;i++){
+          const y=padT+(cH/4)*i;
+          ctx.strokeStyle='#e2e8f0'; ctx.lineWidth=1;
+          ctx.beginPath(); ctx.moveTo(padL,y); ctx.lineTo(padL+cW,y); ctx.stroke();
+          ctx.fillStyle='#94a3b8'; ctx.font='9px monospace'; ctx.textAlign='right';
+          ctx.fillText(Math.round(maxVal*(1-i/4)),padL-4,y+3);
+        }
+        weekDays.forEach((d,i)=>{
+          const cx = padL + slotW*i + slotW/2;
+          // Recibidos bar (blue, left)
+          if(d.areaRecibida>0){
+            const h=(d.areaRecibida/maxVal)*cH;
+            ctx.fillStyle='rgba(59,130,246,0.75)';
+            ctx.fillRect(cx-bW-gap, padT+cH-h, bW, h);
+          }
+          // Montados bar (green, right)
+          if(d.areaTotal>0){
+            const h=(d.areaTotal/maxVal)*cH;
+            ctx.fillStyle='rgba(34,197,94,0.9)';
+            ctx.fillRect(cx+gap, padT+cH-h, bW, h);
+            ctx.fillStyle='#166534'; ctx.font='bold 9px monospace'; ctx.textAlign='center';
+            ctx.fillText(Math.round(d.areaTotal), cx+gap+bW/2, padT+cH-h-4);
+          }
+          // Date label
+          const parts=(d.date||'').split('-');
+          const lbl=parts.length===3?parts[2]+' '+['','ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'][parseInt(parts[1])]:d.date;
+          ctx.fillStyle='#475569'; ctx.font='9px monospace'; ctx.textAlign='center';
+          ctx.fillText(lbl, cx, padT+cH+14);
+        });
+        // Legend
+        ctx.fillStyle='rgba(59,130,246,0.75)'; ctx.fillRect(padL,8,10,8);
+        ctx.fillStyle='#64748b'; ctx.font='9px monospace'; ctx.textAlign='left'; ctx.fillText('Despachados',padL+14,15);
+        ctx.fillStyle='rgba(34,197,94,0.9)'; ctx.fillRect(padL+95,8,10,8);
+        ctx.fillStyle='#64748b'; ctx.fillText('Montados',padL+109,15);
+      }
     }
 
     // Draw plano de avance
@@ -2081,9 +2106,10 @@ function CurvaS({ data }) {
       const jan1=new Date(wYear,0,1);
       const weekStart=new Date(jan1.getTime()+((wNum-1)*7-(jan1.getDay()||7)+1)*86400000);
       const dd=String(weekStart.getDate()).padStart(2,'0');
-      const mm=String(weekStart.getMonth()+1).padStart(2,'0');
+      const meses=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+      const mmNombre=meses[weekStart.getMonth()];
       ctx.fillStyle='#475569'; ctx.font='10px monospace'; ctx.textAlign='center';
-      ctx.fillText(dd+'-'+mm,x,padT+cH+16);
+      ctx.fillText(dd+' '+mmNombre,x,padT+cH+16);
       ctx.fillStyle='#94a3b8'; ctx.font='9px monospace';
       ctx.fillText('S'+wNum,x,padT+cH+28);
     });
