@@ -47,16 +47,25 @@ const defaultPersonal = () => ({coordinadores:1,calidad:1,gruas:1,lideres:1,mont
 // ── PDF Semanal ───────────────────────────────────────────────────────────────
 function generatePDF(weekData, elements, dailyStats, weekLabel, obraName, programaAcum, allElements) {
   const fecha = new Date().toLocaleDateString('es-CL');
-  const weekElements = weekData.montados.map(key => {
-    // key can be torre__piso__pos__tipo or pos__tipo or pos (backward compat)
+  // Collect all keys that were received OR mounted this week
+  const weekMontadosKeys = new Set(weekData.montados);
+  const weekRecibidosKeys = new Set(weekData.recibidos||[]);
+  const allWeekKeys = new Set([...weekMontadosKeys, ...weekRecibidosKeys]);
+
+  function findEl(key) {
     const parts = key.split("__");
-    let el;
-    if(parts.length===4) el = elements.find(e=>`${e.torre}__${e.piso}__${e.pos}__${e.tipo}`===key);
-    else if(parts.length===2) el = elements.find(e=>`${e.pos}__${e.tipo}`===key);
-    else el = elements.find(e=>e.pos===key);
-    const d = dailyStats.find(d=>d.montados.includes(key));
-    return el ? {...el, fecha:d?.date||""} : null;
-  }).filter(Boolean);
+    if(parts.length===4) return elements.find(e=>`${e.torre}__${e.piso}__${e.pos}__${e.tipo}`===key);
+    if(parts.length===2) return elements.find(e=>`${e.pos}__${e.tipo}`===key);
+    return elements.find(e=>e.pos===key);
+  }
+
+  const weekElements = [...allWeekKeys].map(key => {
+    const el = findEl(key);
+    const isMontado = weekMontadosKeys.has(key);
+    const isRecibido = weekRecibidosKeys.has(key);
+    const d = dailyStats.find(d=>d.montados.includes(key)||d.recibidos.includes(key));
+    return el ? {...el, fecha:d?.date||"", estadoPDF: isMontado?"MONTADO":"RECIBIDO"} : null;
+  }).filter(Boolean).sort((a,b)=>`${a.torre}${a.piso}${a.pos}`.localeCompare(`${b.torre}${b.piso}${b.pos}`));
   const incidencias = dailyStats.filter(d=>getWeekNumber(d.date)===weekLabel);
 
   const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"/>
@@ -111,10 +120,22 @@ ${programaAcum&&programaAcum.length>0?`<div class="section"><div class="section-
 ${incidencias.map(d=>`<tr><td class="amber">${d.date}</td><td>${d.note||"Sin incidencias"}</td></tr>`).join('')}
 ${incidencias.length===0?'<tr><td colspan="2" style="text-align:center;color:#94a3b8">Sin incidencias</td></tr>':''}
 </table></div>
-<div class="section" style="page-break-before:always;"><div class="section-title">ELEMENTOS MONTADOS — SEMANA ${weekLabel}</div><table>
-<tr><th>LOTE</th><th>TORRE</th><th>PISO</th><th>TIPO</th><th>POSICIÓN</th><th>ÁREA m²</th><th>FECHA</th></tr>
-${weekElements.map(el=>`<tr><td>${el.lote||""}</td><td>${el.torre||""}</td><td>${el.piso||""}</td><td class="${TIPOS_MD.includes(el.tipo)?"green":"blue"}">${el.tipo}</td><td>${el.pos}</td><td>${fmt2(el.area)}</td><td>${el.fecha}</td></tr>`).join('')}
-<tr style="background:#f1f5f9"><td colspan="5"><b>TOTAL</b></td><td class="amber"><b>${fmt2(weekData.areaTotal)} m²</b></td><td></td></tr>
+<div class="section" style="page-break-before:always;"><div class="section-title">AVANCE GENERAL DE OBRA</div>
+<div style="display:flex;justify-content:center;gap:60px;padding:16px;align-items:center">
+  <div style="text-align:center">
+    <div style="font-size:9px;color:#64748b;letter-spacing:2px;margin-bottom:8px">DESPACHADO</div>
+    <canvas id="donutDespachados" width="160" height="160"></canvas>
+  </div>
+  <div style="text-align:center">
+    <div style="font-size:9px;color:#64748b;letter-spacing:2px;margin-bottom:8px">MONTADO</div>
+    <canvas id="donutMontados" width="160" height="160"></canvas>
+  </div>
+</div>
+</div>
+<div class="section" style="page-break-before:always;"><div class="section-title">ELEMENTOS RECIBIDOS Y MONTADOS — SEMANA ${weekLabel}</div><table>
+<tr><th>LOTE</th><th>TORRE</th><th>PISO</th><th>TIPO</th><th>POSICIÓN</th><th>ÁREA m²</th><th>ESTADO</th><th>FECHA</th></tr>
+${weekElements.map(el=>`<tr><td>${el.lote||""}</td><td>${el.torre||""}</td><td>${el.piso||""}</td><td class="${TIPOS_MD.includes(el.tipo)?"green":"blue"}">${el.tipo}</td><td>${el.pos}</td><td>${fmt2(el.area)}</td><td style="color:${el.estadoPDF==="MONTADO"?"#16a34a":"#2563eb"}">${el.estadoPDF}</td><td>${el.fecha}</td></tr>`).join('')}
+<tr style="background:#f1f5f9"><td colspan="5"><b>TOTAL MONTADOS</b></td><td class="amber"><b>${fmt2(weekData.areaTotal)} m²</b></td><td colspan="2"></td></tr>
 </table></div>
 <div style="margin-top:24px;padding:20px 28px;background:#fff;border:1px solid #cbd5e1;border-radius:8px;display:flex;justify-content:space-between;align-items:flex-end">
   <div><div style="font-size:8px;color:#94a3b8;letter-spacing:2px;margin-bottom:4px">INFORME EMITIDO POR</div><div style="font-size:9px;color:#64748b">${fecha}</div></div>
@@ -211,6 +232,49 @@ ${weekElements.map(el=>`<tr><td>${el.lote||""}</td><td>${el.torre||""}</td><td>$
       planoDiv.innerHTML=html;
     }
 
+    // Draw donut charts
+    function drawDonut(canvasId, pct, label, color) {
+      const c = doc2.getElementById(canvasId);
+      if(!c) return;
+      const ctx2 = c.getContext('2d');
+      const cx=90, cy=90, r=72, rIn=48;
+      ctx2.clearRect(0,0,180,180);
+      // Background arc
+      ctx2.beginPath(); ctx2.arc(cx,cy,r,0,Math.PI*2);
+      ctx2.fillStyle='#f1f5f9'; ctx2.fill();
+      // Value arc
+      const angle = (pct/100)*Math.PI*2 - Math.PI/2;
+      ctx2.beginPath(); ctx2.moveTo(cx,cy);
+      ctx2.arc(cx,cy,r,-Math.PI/2,angle);
+      ctx2.closePath(); ctx2.fillStyle=color; ctx2.fill();
+      // Inner circle (donut hole)
+      ctx2.beginPath(); ctx2.arc(cx,cy,rIn,0,Math.PI*2);
+      ctx2.fillStyle='#fff'; ctx2.fill();
+      // % text
+      ctx2.fillStyle='#1e293b'; ctx2.font='bold 22px monospace'; ctx2.textAlign='center'; ctx2.textBaseline='middle';
+      ctx2.fillText(Math.round(pct)+'%', cx, cy-8);
+      // label text
+      ctx2.fillStyle='#64748b'; ctx2.font='10px monospace';
+      ctx2.fillText(label, cx, cy+12);
+    }
+
+    // Calculate totals from elements
+    const totalAreaPDF = elements.reduce((s,e)=>s+e.area,0);
+    const mountedAreaPDF = elements.filter(e=>{
+      const k=`${e.torre}__${e.piso}__${e.pos}__${e.tipo}`;
+      return dailyStats.some(d=>d.aprobado&&(d.montados.includes(k)||d.montados.includes(`${e.pos}__${e.tipo}`)||d.montados.includes(e.pos)));
+    }).reduce((s,e)=>s+e.area,0);
+    const receivedAreaPDF = elements.filter(e=>{
+      const k=`${e.torre}__${e.piso}__${e.pos}__${e.tipo}`;
+      return dailyStats.some(d=>d.aprobado&&(d.recibidos.includes(k)||d.recibidos.includes(`${e.pos}__${e.tipo}`)||d.recibidos.includes(e.pos)||d.montados.includes(k)||d.montados.includes(`${e.pos}__${e.tipo}`)||d.montados.includes(e.pos)));
+    }).reduce((s,e)=>s+e.area,0);
+
+    const pctReceived = totalAreaPDF>0?(receivedAreaPDF/totalAreaPDF)*100:0;
+    const pctMounted  = totalAreaPDF>0?(mountedAreaPDF/totalAreaPDF)*100:0;
+
+    drawDonut('donutDespachados', pctReceived, 'Despachado', '#3b82f6');
+    drawDonut('donutMontados',    pctMounted,  'Montado',    '#16a34a');
+
     iframe.contentWindow.focus();
     iframe.contentWindow.print();
     setTimeout(()=>document.body.removeChild(iframe),1000);
@@ -243,13 +307,17 @@ ${programaAcum&&programaAcum.length>0?`<div class="section"><div class="section-
 ${weeklyStats.map(w=>`<tr><td class="amber">${w.week}</td><td class="blue">${fmt2(w.areaRecibida)}</td><td class="green">${fmt2(w.areaMD)}</td><td class="blue">${fmt2(w.areaP)}</td><td class="amber">${fmt2(w.areaTotal)}</td><td>${w.diasEfectivos}</td><td>${fmt2(w.rendEfectivo)}</td><td>${fmt2(w.rendEquipo)}</td></tr>`).join('')}
 <tr style="background:#f1f5f9;font-weight:bold"><td class="amber">TOTAL</td><td class="blue">${fmt2(weeklyStats.reduce((s,w)=>s+w.areaRecibida,0))}</td><td class="green">${fmt2(weeklyStats.reduce((s,w)=>s+w.areaMD,0))}</td><td class="blue">${fmt2(weeklyStats.reduce((s,w)=>s+w.areaP,0))}</td><td class="amber">${fmt2(weeklyStats.reduce((s,w)=>s+w.areaTotal,0))}</td><td>${weeklyStats.reduce((s,w)=>s+w.diasEfectivos,0)}</td><td colspan="2"></td></tr>
 </table></div>
-<div class="section"><div class="section-title">INVENTARIO COMPLETO</div><table>
+<div class="section"><div class="section-title">INVENTARIO — ELEMENTOS RECIBIDOS Y MONTADOS</div><table>
 <tr><th>LOTE</th><th>TORRE</th><th>PISO</th><th>TIPO</th><th>POSICIÓN</th><th>ÁREA m²</th><th>ESTADO</th><th>F. RECEPCIÓN</th><th>F. MONTAJE</th></tr>
-${elements.map(el=>{
-  const logM=dailyStats.find(d=>d.montados.includes(el.pos));
-  const logR=dailyStats.find(d=>d.recibidos.includes(el.pos));
-  const estado=logM?"MONTADO":logR?"RECIBIDO":"PENDIENTE";
-  const color=logM?"green":logR?"blue":"";
+${elements.filter(el=>{
+  const k=`${el.torre}__${el.piso}__${el.pos}__${el.tipo}`;
+  return dailyStats.some(d=>d.aprobado&&(d.montados.includes(k)||d.montados.includes(`${el.pos}__${el.tipo}`)||d.montados.includes(el.pos)||d.recibidos.includes(k)||d.recibidos.includes(`${el.pos}__${el.tipo}`)||d.recibidos.includes(el.pos)));
+}).sort((a,b)=>(a.torre+a.piso+a.pos).localeCompare(b.torre+b.piso+b.pos)).map(el=>{
+  const k=`${el.torre}__${el.piso}__${el.pos}__${el.tipo}`;
+  const logM=dailyStats.find(d=>d.aprobado&&(d.montados.includes(k)||d.montados.includes(`${el.pos}__${el.tipo}`)||d.montados.includes(el.pos)));
+  const logR=dailyStats.find(d=>d.aprobado&&(d.recibidos.includes(k)||d.recibidos.includes(`${el.pos}__${el.tipo}`)||d.recibidos.includes(el.pos)));
+  const estado=logM?"MONTADO":"RECIBIDO";
+  const color=logM?"green":"blue";
   return `<tr><td>${el.lote||""}</td><td>${el.torre||""}</td><td>${el.piso||""}</td><td class="${TIPOS_MD.includes(el.tipo)?"green":"blue"}">${el.tipo}</td><td>${el.pos}</td><td>${fmt2(el.area)}</td><td class="${color}">${estado}</td><td>${logR?.date||""}</td><td>${logM?.date||""}</td></tr>`;
 }).join('')}
 </table></div>
@@ -1029,6 +1097,8 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
 
   // Filters
   const [filterSearch, setFilterSearch] = useState("");
+  const [elemPage, setElemPage] = useState(0);
+  const ELEMS_PER_PAGE = 100;
   const [filterTipo,   setFilterTipo]   = useState("TODOS");
   const [filterTorre,  setFilterTorre]  = useState("TODAS");
   const [filterPiso,   setFilterPiso]   = useState("TODOS");
@@ -1496,7 +1566,7 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
               <StatCard label="% AVANCE" value={fmtPct(pctAll)} sub={fmt2(stats.all.areaMounted)+" / "+fmt2(stats.all.areaTotal)+" m²"} color="#d97706"/>
             </div>
             <div style={{ display:"flex",gap:6,marginBottom:14,flexWrap:"wrap" }}>
-              <input placeholder="Buscar…" value={filterSearch} onChange={e=>setFilterSearch(e.target.value)} style={{ ...inp,width:160,margin:0 }}/>
+              <input placeholder="Buscar…" value={filterSearch} onChange={e=>{setFilterSearch(e.target.value);setElemPage(0);}} style={{ ...inp,width:160,margin:0 }}/>
               <select value={filterLote}   onChange={e=>setFilterLote(e.target.value)}   style={{ ...inp,margin:0,width:"auto" }}>{lotes.map(t=><option key={t} value={t}>{t==="TODOS"?"Lote: Todos":t}</option>)}</select>
               <select value={filterTorre}  onChange={e=>setFilterTorre(e.target.value)}  style={{ ...inp,margin:0,width:"auto" }}>{torres.map(t=><option key={t} value={t}>{t==="TODAS"?"Torre: Todas":t}</option>)}</select>
               <select value={filterPiso}   onChange={e=>setFilterPiso(e.target.value)}   style={{ ...inp,margin:0,width:"auto" }}>{pisos.map(t=><option key={t} value={t}>{t==="TODOS"?"Piso: Todos":t}</option>)}</select>
@@ -1516,8 +1586,8 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
                     {isAdmin&&<Th>ADMIN</Th>}
                   </tr>
                 </thead>
-                <tbody key={`elem-${filterTorre}-${filterTipo}-${filterPiso}-${filterLote}-${filterEstado}-${filterSearch}`}>
-                  {filteredElements.map(el=>{
+                <tbody key={`elem-${filterTorre}-${filterTipo}-${filterPiso}-${filterLote}-${filterEstado}-${filterSearch}-${elemPage}`}>
+                  {filteredElements.slice(elemPage*ELEMS_PER_PAGE,(elemPage+1)*ELEMS_PER_PAGE).map(el=>{
                     const estado=getEstado(`${el.torre}__${el.piso}__${el.pos}__${el.tipo}`);
                     const logR=logs.find(l=>l.aprobado&&(l.recibidos.includes(`${el.torre}__${el.piso}__${el.pos}__${el.tipo}`)||l.recibidos.includes(`${el.pos}__${el.tipo}`)||l.recibidos.includes(el.pos)));
                     const logM=logs.find(l=>l.aprobado&&(l.montados.includes(`${el.torre}__${el.piso}__${el.pos}__${el.tipo}`)||l.montados.includes(`${el.pos}__${el.tipo}`)||l.montados.includes(el.pos)));
