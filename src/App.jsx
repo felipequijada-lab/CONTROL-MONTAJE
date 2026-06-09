@@ -35,13 +35,14 @@ async function sbFetch(path, options={}) {
 }
 
 const PERSONAL_CARGOS = [
-  { key:"coordinadores", label:"Coordinadores", max:2, productivo:false },
-  { key:"calidad",       label:"Calidad",       max:4, productivo:false },
-  { key:"lideres",       label:"Líderes",       max:4, productivo:true  },
-  { key:"montajistas",   label:"Montajistas",   max:15,productivo:true  },
-  { key:"ayudantes",     label:"Ayudantes",     max:15,productivo:true  },
+  { key:"coordinadores", label:"Coordinadores", max:2,  productivo:false },
+  { key:"calidad",       label:"Calidad",       max:4,  productivo:false },
+  { key:"gruas",         label:"N° Grúas",      max:10, productivo:false, special:true },
+  { key:"lideres",       label:"Líderes",       max:4,  productivo:true  },
+  { key:"montajistas",   label:"Montajistas",   max:15, productivo:true  },
+  { key:"ayudantes",     label:"Ayudantes",     max:15, productivo:true  },
 ];
-const defaultPersonal = () => ({coordinadores:1,calidad:1,lideres:1,montajistas:2,ayudantes:2});
+const defaultPersonal = () => ({coordinadores:1,calidad:1,gruas:1,lideres:1,montajistas:2,ayudantes:2});
 
 // ── PDF Semanal ───────────────────────────────────────────────────────────────
 function generatePDF(weekData, elements, dailyStats, weekLabel, obraName, programaAcum, allElements) {
@@ -1065,7 +1066,7 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
         // For old format, try to find the element and reconstruct the key
         const rawMontados=(row.elementos_montados||"").split(",").map(p=>p.trim()).filter(Boolean);
         const rawRecibidos=(row.elementos_recibidos||"").split(",").map(p=>p.trim()).filter(Boolean);
-        expanded.push({date:row.fecha,montados:rawMontados,recibidos:rawRecibidos,aprobado:row.aprobado===true||row.aprobado==="true",personal:{coordinadores:row.coordinadores||0,calidad:row.calidad||0,lideres:row.lideres||0,montajistas:row.montajistas||0,ayudantes:row.ayudantes||0},note:row.incidencias||""});
+        expanded.push({date:row.fecha,montados:rawMontados,recibidos:rawRecibidos,aprobado:row.aprobado===true||row.aprobado==="true",personal:{coordinadores:row.coordinadores||0,calidad:row.calidad||0,gruas:row.gruas||0,lideres:row.lideres||0,montajistas:row.montajistas||0,ayudantes:row.ayudantes||0},note:row.incidencias||""});
       });
       setLogs(expanded);
       setPrograma(progData);
@@ -1130,7 +1131,7 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
       const pEls  = elements.filter(e=>toMount.includes(`${e.torre}__${e.piso}__${e.pos}__${e.tipo}`)&&e.tipo==="P");
       await sbFetch("registros",{method:"POST",body:JSON.stringify({
         fecha:selectedDate,obra_id:obra.id,
-        coordinadores:personal.coordinadores,calidad:personal.calidad,lideres:personal.lideres,montajistas:personal.montajistas,ayudantes:personal.ayudantes,
+        coordinadores:personal.coordinadores,calidad:personal.calidad,gruas:personal.gruas,lideres:personal.lideres,montajistas:personal.montajistas,ayudantes:personal.ayudantes,
         m2_md:mdEls.reduce((s,e)=>s+e.area,0),m2_p:pEls.reduce((s,e)=>s+e.area,0),
         elementos_montados:toMount.join(","),elementos_recibidos:toReceive.join(","),
         incidencias:note,registrado_por:currentUser?.nombre||"encargado",
@@ -1204,7 +1205,8 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
       const areaRecibida=elements.filter(e=>d.recibidos.includes(`${e.torre}__${e.piso}__${e.pos}__${e.tipo}`)||d.recibidos.includes(`${e.pos}__${e.tipo}`)||d.recibidos.includes(e.pos)).reduce((s,e)=>s+e.area,0);
       const p=d.personal;
       const eq=(p.coordinadores||0)+(p.calidad||0)+(p.lideres||0)+(p.montajistas||0)+(p.ayudantes||0);
-      return {...d,areaMD,areaP,areaTotal,areaRecibida,rendLider:p.lideres>0?areaTotal/p.lideres:0,rendMontajista:p.montajistas>0?areaTotal/p.montajistas:0,rendAyudante:p.ayudantes>0?areaTotal/p.ayudantes:0,rendEquipo:eq>0?areaTotal/eq:0,equipoCompleto:eq};
+      const gruas=p.gruas||p.lideres||1;
+      return {...d,areaMD,areaP,areaTotal,areaRecibida,rendLider:p.lideres>0?areaTotal/p.lideres:0,rendMontajista:p.montajistas>0?areaTotal/p.montajistas:0,rendAyudante:p.ayudantes>0?areaTotal/p.ayudantes:0,rendEquipo:gruas>0?areaTotal/gruas:0,equipoCompleto:eq,gruas};
     }).sort((a,b)=>b.date.localeCompare(a.date));
   },[logs,elements]);
 
@@ -1226,12 +1228,14 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
       const avgP={
         coordinadores:Math.round(w.days.reduce((s,d)=>s+d.personal.coordinadores,0)/w.days.length),
         calidad:Math.round(w.days.reduce((s,d)=>s+d.personal.calidad,0)/w.days.length),
+        gruas:Math.round(w.days.reduce((s,d)=>s+(d.personal.gruas||d.personal.lideres||1),0)/w.days.length),
         lideres:Math.round(w.days.reduce((s,d)=>s+d.personal.lideres,0)/w.days.length),
         montajistas:Math.round(w.days.reduce((s,d)=>s+d.personal.montajistas,0)/w.days.length),
         ayudantes:Math.round(w.days.reduce((s,d)=>s+d.personal.ayudantes,0)/w.days.length),
       };
       const eq=Object.values(avgP).reduce((a,b)=>a+b,0);
-      return {week:w.week,diasEfectivos,areaTotal,areaMD,areaP,areaRecibida,montados:w.montados,recibidos:w.recibidos,personal:avgP,equipoCompleto:eq,rendLider:avgP.lideres>0?areaTotal/avgP.lideres:0,rendMontajista:avgP.montajistas>0?areaTotal/avgP.montajistas:0,rendAyudante:avgP.ayudantes>0?areaTotal/avgP.ayudantes:0,rendEquipo:eq>0?areaTotal/eq:0,rendEfectivo:diasEfectivos>0?areaTotal/diasEfectivos:0};
+      const gruas=avgP.gruas||avgP.lideres||1;
+      return {week:w.week,diasEfectivos,areaTotal,areaMD,areaP,areaRecibida,montados:w.montados,recibidos:w.recibidos,personal:avgP,equipoCompleto:eq,gruas,rendLider:avgP.lideres>0?areaTotal/avgP.lideres:0,rendMontajista:avgP.montajistas>0?areaTotal/avgP.montajistas:0,rendAyudante:avgP.ayudantes>0?areaTotal/avgP.ayudantes:0,rendEquipo:gruas>0?areaTotal/gruas:0,rendEfectivo:diasEfectivos>0?areaTotal/diasEfectivos:0};
     }).sort((a,b)=>b.week.localeCompare(a.week));
   },[dailyStats]);
 
@@ -1971,10 +1975,16 @@ function CurvaS({ data }) {
       const x=xPos(i);
       ctx.strokeStyle='#f1f5f9'; ctx.lineWidth=1;
       ctx.beginPath(); ctx.moveTo(x,padT); ctx.lineTo(x,padT+cH); ctx.stroke();
+      // Calculate week start date (Monday) for label
+      const [wNum,wYear]=d.semana.split('.').map(Number);
+      const jan1=new Date(wYear,0,1);
+      const weekStart=new Date(jan1.getTime()+((wNum-1)*7-(jan1.getDay()||7)+1)*86400000);
+      const dd=String(weekStart.getDate()).padStart(2,'0');
+      const mm=String(weekStart.getMonth()+1).padStart(2,'0');
       ctx.fillStyle='#475569'; ctx.font='10px monospace'; ctx.textAlign='center';
-      ctx.fillText("S"+d.semana.split('.')[0],x,padT+cH+16);
+      ctx.fillText(dd+'-'+mm,x,padT+cH+16);
       ctx.fillStyle='#94a3b8'; ctx.font='9px monospace';
-      ctx.fillText(d.semana.split('.')[1],x,padT+cH+28);
+      ctx.fillText('S'+wNum,x,padT+cH+28);
     });
 
     // Bar width based on available space per week
