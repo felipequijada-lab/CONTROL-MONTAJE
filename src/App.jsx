@@ -179,7 +179,7 @@ ${weekElements.map(el=>`<tr><td>${el.lote||""}</td><td>${el.torre||""}</td><td>$
       const W=700, H=200;
       const padL=50,padR=20,padT=25,padB=40,cW=W-padL-padR,cH=H-padT-padB;
       ctx.fillStyle='#f8fafc'; ctx.fillRect(0,0,W,H);
-      const weekDaysRaw = dailyStats.filter(d=>getWeekNumber(d.date)===effectiveWeek);
+      const weekDaysRaw = dailyStats.filter(d=>getWeekNumber(d.date)===weekLabel);
       const weekDays = [...weekDaysRaw].sort((a,b)=>a.date.localeCompare(b.date));
       if(weekDays.length===0) { ctx.fillStyle='#94a3b8'; ctx.font='12px monospace'; ctx.textAlign='center'; ctx.fillText('Sin datos para esta semana',W/2,H/2); }
       else {
