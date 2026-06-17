@@ -758,6 +758,37 @@ function AdminPanel({ obras, onBack, onObraCreated, setError, onViewObra }) {
     setLoadingStats(false);
   }
 
+  async function descargarBackup() {
+    try {
+      const [obrasData, elementosData, registrosData, programaData, usuariosData, usuariosObrasData] = await Promise.all([
+        sbFetch("obras?select=*"),
+        (async()=>{ const all=[]; let offset=0; while(true){ const b=await sbFetch(`elementos?select=*&limit=1000&offset=${offset}`); all.push(...b); if(b.length<1000) break; offset+=1000; } return all; })(),
+        (async()=>{ const all=[]; let offset=0; while(true){ const b=await sbFetch(`registros?select=*&limit=1000&offset=${offset}`); all.push(...b); if(b.length<1000) break; offset+=1000; } return all; })(),
+        sbFetch("programa?select=*"),
+        sbFetch("usuarios?select=*"),
+        sbFetch("usuarios_obras?select=*"),
+      ]);
+      const backup = {
+        fecha_backup: new Date().toISOString(),
+        obras: obrasData,
+        elementos: elementosData,
+        registros: registrosData,
+        programa: programaData,
+        usuarios: usuariosData,
+        usuarios_obras: usuariosObrasData,
+      };
+      const blob = new Blob([JSON.stringify(backup, null, 2)], {type:"application/json"});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `backup_control_montaje_${new Date().toISOString().slice(0,10)}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch(e){ setError("Error en backup: "+e.message); }
+  }
+
   async function crearObra() {
     if(!newObra.nombre) return;
     setCreando(true);
@@ -826,6 +857,9 @@ function AdminPanel({ obras, onBack, onObraCreated, setError, onViewObra }) {
       <div style={{ background:"#f8fafc", borderBottom:"1px solid #cbd5e1", padding:"14px 28px", display:"flex", alignItems:"center", gap:16 }}>
         <button onClick={onBack} style={btnSecondary}>← Volver</button>
         <div style={{ fontFamily:"'Archivo Black',sans-serif", fontSize:18, color:"#d97706" }}>⚙ PANEL ADMINISTRADOR</div>
+        <div style={{ marginLeft:"auto" }}>
+          <button onClick={descargarBackup} style={{ background:"#f1f5f9",color:"#475569",border:"1px solid #cbd5e1",borderRadius:6,padding:"8px 16px",cursor:"pointer",fontFamily:"'DM Mono',monospace",fontSize:11 }}>⬇ Backup Completo</button>
+        </div>
       </div>
       <div style={{ display:"flex", background:"#f8fafc", borderBottom:"1px solid #cbd5e1", padding:"0 28px" }}>
         {[["resumen","Dashboard"],["aprobacion","Aprobaciones"],["obras","Obras"],["usuarios","Usuarios"],["elementos","Elementos"],["programa","Programa"],["historico","Histórico"]].map(([k,l])=>(
