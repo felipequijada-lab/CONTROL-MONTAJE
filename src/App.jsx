@@ -2,8 +2,8 @@
 import React, { useState, useMemo, useEffect, useRef } from "react";
 import * as XLSX from "xlsx";
 
-const SUPABASE_URL = "https://uxgkiuhcqcvcwkvtjqvo.supabase.co";
-const SUPABASE_KEY = "sb_publishable_CSpI4hVvQmUWai7oQcPmuQ_mZe3EYqA";
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "https://uxgkiuhcqcvcwkvtjqvo.supabase.co";
+const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_KEY || "sb_publishable_CSpI4hVvQmUWai7oQcPmuQ_mZe3EYqA";
 const ADMIN_PIN = "18670610";
 const TIPOS_MD = ["MD", "MDT"];
 
@@ -1388,8 +1388,12 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
 
   // Count pending actions
   const pendingCount = Object.values(elementActions).filter(v=>v!==null).length;
-  const toReceiveCount = Object.entries(elementActions).filter(([pos,a])=>(a==="recibido"||a==="ambos")&&!recibidosPos.has(pos)&&!montadosPos.has(pos)).length;
-  const toMountCount = Object.entries(elementActions).filter(([pos,a])=>(a==="montado"||a==="ambos")&&!montadosPos.has(pos)).length;
+  const toReceiveKeys = Object.entries(elementActions).filter(([key,a])=>(a==="recibido"||a==="ambos")&&!recibidosPos.has(key)&&!montadosPos.has(key)&&!recibidosPending.has(key)&&!montadosPending.has(key)).map(([key])=>key);
+  const toMountKeys = Object.entries(elementActions).filter(([key,a])=>(a==="montado"||a==="ambos")&&!montadosPos.has(key)&&!montadosPending.has(key)).map(([key])=>key);
+  const toReceiveCount = toReceiveKeys.length;
+  const toMountCount = toMountKeys.length;
+  const toReceiveArea = elements.filter(e=>toReceiveKeys.includes(`${e.torre}__${e.piso}__${e.pos}__${e.tipo}`)).reduce((s,e)=>s+e.area,0);
+  const toMountArea = elements.filter(e=>toMountKeys.includes(`${e.torre}__${e.piso}__${e.pos}__${e.tipo}`)).reduce((s,e)=>s+e.area,0);
 
   if(loading) return <LoadingScreen/>;
 
@@ -1458,8 +1462,8 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
                   {pendingCount>0&&(
                     <div style={{ background:"#f1f5f9",borderRadius:6,padding:10,marginTop:8,border:"1px solid #cbd5e1",fontSize:11 }}>
                       <div style={{ color:"#94a3b8",fontSize:9,letterSpacing:2,marginBottom:6 }}>SELECCIÓN ACTUAL</div>
-                      {toReceiveCount>0&&<div style={{ color:"#2563eb" }}>📦 Recibir: {toReceiveCount} elementos</div>}
-                      {toMountCount>0&&<div style={{ color:"#16a34a",marginTop:3 }}>🔧 Montar: {toMountCount} elementos</div>}
+                      {toReceiveCount>0&&<div style={{ color:"#2563eb" }}>📦 Recibir: {toReceiveCount} elementos · {fmt2(toReceiveArea)} m²</div>}
+                      {toMountCount>0&&<div style={{ color:"#16a34a",marginTop:3 }}>🔧 Montar: {toMountCount} elementos · {fmt2(toMountArea)} m²</div>}
                     </div>
                   )}
                   <button onClick={registrar} disabled={pendingCount===0||saving} style={{ width:"100%",padding:"11px",marginTop:10,background:pendingCount>0&&!saving?"#d97706":"#e2e8f0",color:pendingCount>0&&!saving?"#fff":"#94a3b8",border:"none",borderRadius:6,cursor:pendingCount>0&&!saving?"pointer":"default",fontFamily:"'Archivo Black',sans-serif",fontSize:13,letterSpacing:1 }}>
