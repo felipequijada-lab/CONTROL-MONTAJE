@@ -11,6 +11,15 @@ const fmt2 = n => isNaN(n) ? "0.00" : (Math.round(n*100)/100).toFixed(2);
 const fmtPct = n => (Math.round(n*10)/10).toFixed(1)+"%";
 const TODAY = new Date().toISOString().slice(0,10);
 
+// Unique element key: torre__piso__pos__tipo (avoids collisions across torres/tipos with same pos)
+function elKeyOf(el) { return `${el.torre}__${el.piso}__${el.pos}__${el.tipo}`; }
+
+// Checks if an element matches any key in a Set, supporting current format (torre__piso__pos__tipo)
+// and older historical formats (pos__tipo, pos) for backward compatibility with legacy registros.
+function elMatchesKeys(el, keysSet) {
+  return keysSet.has(elKeyOf(el)) || keysSet.has(`${el.pos}__${el.tipo}`) || keysSet.has(el.pos);
+}
+
 function getWeekNumber(dateStr) {
   const d = new Date(dateStr);
   const start = new Date(d.getFullYear(),0,1);
@@ -54,7 +63,7 @@ function generatePDF(weekData, elements, dailyStats, weekLabel, obraName, progra
 
   function findEl(key) {
     const parts = key.split("__");
-    if(parts.length===4) return elements.find(e=>`${e.torre}__${e.piso}__${e.pos}__${e.tipo}`===key);
+    if(parts.length===4) return elements.find(e=>elKeyOf(e)===key);
     if(parts.length===2) return elements.find(e=>`${e.pos}__${e.tipo}`===key);
     return elements.find(e=>e.pos===key);
   }
@@ -300,11 +309,11 @@ ${weekElements.map(el=>`<tr><td>${el.lote||""}</td><td>${el.torre||""}</td><td>$
     // Calculate totals from elements
     const totalAreaPDF = elements.reduce((s,e)=>s+e.area,0);
     const mountedAreaPDF = elements.filter(e=>{
-      const k=`${e.torre}__${e.piso}__${e.pos}__${e.tipo}`;
+      const k=elKeyOf(e);
       return dailyStats.some(d=>d.aprobado&&(d.montados.includes(k)||d.montados.includes(`${e.pos}__${e.tipo}`)||d.montados.includes(e.pos)));
     }).reduce((s,e)=>s+e.area,0);
     const receivedAreaPDF = elements.filter(e=>{
-      const k=`${e.torre}__${e.piso}__${e.pos}__${e.tipo}`;
+      const k=elKeyOf(e);
       return dailyStats.some(d=>d.aprobado&&(d.recibidos.includes(k)||d.recibidos.includes(`${e.pos}__${e.tipo}`)||d.recibidos.includes(e.pos)||d.montados.includes(k)||d.montados.includes(`${e.pos}__${e.tipo}`)||d.montados.includes(e.pos)));
     }).reduce((s,e)=>s+e.area,0);
 
@@ -349,10 +358,10 @@ ${weeklyStats.map(w=>`<tr><td class="amber">${w.week}</td><td class="blue">${fmt
 <div class="section"><div class="section-title">INVENTARIO — ELEMENTOS RECIBIDOS Y MONTADOS</div><table>
 <tr><th>LOTE</th><th>TORRE</th><th>PISO</th><th>TIPO</th><th>POSICIÓN</th><th>ÁREA m²</th><th>ESTADO</th><th>F. RECEPCIÓN</th><th>F. MONTAJE</th></tr>
 ${elements.filter(el=>{
-  const k=`${el.torre}__${el.piso}__${el.pos}__${el.tipo}`;
+  const k=elKeyOf(el);
   return dailyStats.some(d=>d.aprobado&&(d.montados.includes(k)||d.montados.includes(`${el.pos}__${el.tipo}`)||d.montados.includes(el.pos)||d.recibidos.includes(k)||d.recibidos.includes(`${el.pos}__${el.tipo}`)||d.recibidos.includes(el.pos)));
 }).sort((a,b)=>(a.torre+a.piso+a.pos).localeCompare(b.torre+b.piso+b.pos)).map(el=>{
-  const k=`${el.torre}__${el.piso}__${el.pos}__${el.tipo}`;
+  const k=elKeyOf(el);
   const logM=dailyStats.find(d=>d.aprobado&&(d.montados.includes(k)||d.montados.includes(`${el.pos}__${el.tipo}`)||d.montados.includes(el.pos)));
   const logR=dailyStats.find(d=>d.aprobado&&(d.recibidos.includes(k)||d.recibidos.includes(`${el.pos}__${el.tipo}`)||d.recibidos.includes(el.pos)));
   const estado=logM?"MONTADO":"RECIBIDO";
@@ -734,7 +743,7 @@ function AdminPanel({ obras, onBack, onObraCreated, setError, onViewObra }) {
         const montadosPos = new Set(aprobados.flatMap(r=>r.elementos_montados?r.elementos_montados.split(",").map(p=>p.trim()).filter(Boolean):[]));
         const recibidosPos = new Set(aprobados.flatMap(r=>r.elementos_recibidos?r.elementos_recibidos.split(",").map(p=>p.trim()).filter(Boolean):[]));
         const totalArea = elems.reduce((s,e)=>s+e.area,0);
-        const chkM = (e,keys) => keys.has(`${e.torre}__${e.piso}__${e.pos}__${e.tipo}`)||keys.has(`${e.pos}__${e.tipo}`)||keys.has(e.pos);
+        const chkM = (e,keys) => keys.has(elKeyOf(e))||keys.has(`${e.pos}__${e.tipo}`)||keys.has(e.pos);
         const mountedArea = elems.filter(e=>chkM(e,montadosPos)).reduce((s,e)=>s+e.area,0);
         const receivedArea = elems.filter(e=>chkM(e,recibidosPos)||chkM(e,montadosPos)).reduce((s,e)=>s+e.area,0);
 
@@ -1226,7 +1235,7 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
   const montadosPending = useMemo(()=>new Set(logs.filter(l=>!l.aprobado).flatMap(l=>l.montados)),[logs]);
   const recibidosPending= useMemo(()=>new Set(logs.filter(l=>!l.aprobado).flatMap(l=>l.recibidos)),[logs]);
 
-  const elK        = (el) => `${el.torre}__${el.piso}__${el.pos}__${el.tipo}`;
+  const elK        = (el) => elKeyOf(el);
   const isMontado  = (el) => { const k=elK(el); return montadosPos.has(k)||montadosPending.has(k); };
   const isRecibido = (el) => { const k=elK(el); return recibidosPos.has(k)||recibidosPending.has(k); };
   const isPendingM = (el) => montadosPending.has(elK(el));
@@ -1240,7 +1249,7 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
 
   // Toggle element action — key is pos__tipo
   function toggleAction(el, action) {
-    const key = `${el.torre}__${el.piso}__${el.pos}__${el.tipo}`;
+    const key = elKeyOf(el);
     if(isClosed && !isAdmin) return;
     const estado = getEstado(key);
     if(estado==="montado" && !isAdmin) return;
@@ -1270,8 +1279,8 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
     setSaving(true);
     try {
       // toMount/toReceive contain pos__tipo keys
-      const mdEls = elements.filter(e=>toMount.includes(`${e.torre}__${e.piso}__${e.pos}__${e.tipo}`)&&TIPOS_MD.includes(e.tipo));
-      const pEls  = elements.filter(e=>toMount.includes(`${e.torre}__${e.piso}__${e.pos}__${e.tipo}`)&&e.tipo==="P");
+      const mdEls = elements.filter(e=>toMount.includes(elKeyOf(e))&&TIPOS_MD.includes(e.tipo));
+      const pEls  = elements.filter(e=>toMount.includes(elKeyOf(e))&&e.tipo==="P");
       await sbFetch("registros",{method:"POST",body:JSON.stringify({
         fecha:selectedDate,obra_id:obra.id,
         coordinadores:personal.coordinadores,calidad:personal.calidad,gruas:personal.gruas,lideres:personal.lideres,montajistas:personal.montajistas,ayudantes:personal.ayudantes,
@@ -1339,13 +1348,13 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
       map[l.date].note=l.note||map[l.date].note;
     });
     return Object.values(map).map(d=>{
-      const elems=elements.filter(e=>d.montados.includes(`${e.torre}__${e.piso}__${e.pos}__${e.tipo}`)||d.montados.includes(`${e.pos}__${e.tipo}`)||d.montados.includes(e.pos));
+      const elems=elements.filter(e=>d.montados.includes(elKeyOf(e))||d.montados.includes(`${e.pos}__${e.tipo}`)||d.montados.includes(e.pos));
       const mdEl=elems.filter(e=>TIPOS_MD.includes(e.tipo));
       const pEl=elems.filter(e=>e.tipo==="P");
       const areaMD=mdEl.reduce((s,e)=>s+e.area,0);
       const areaP=pEl.reduce((s,e)=>s+e.area,0);
       const areaTotal=areaMD+areaP;
-      const areaRecibida=elements.filter(e=>d.recibidos.includes(`${e.torre}__${e.piso}__${e.pos}__${e.tipo}`)||d.recibidos.includes(`${e.pos}__${e.tipo}`)||d.recibidos.includes(e.pos)).reduce((s,e)=>s+e.area,0);
+      const areaRecibida=elements.filter(e=>d.recibidos.includes(elKeyOf(e))||d.recibidos.includes(`${e.pos}__${e.tipo}`)||d.recibidos.includes(e.pos)).reduce((s,e)=>s+e.area,0);
       const p=d.personal;
       const eq=(p.coordinadores||0)+(p.calidad||0)+(p.lideres||0)+(p.montajistas||0)+(p.ayudantes||0);
       const gruas=p.gruas||p.lideres||1;
@@ -1403,7 +1412,7 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
       const mtr=filterTorre==="TODAS"||e.torre===filterTorre;
       const mp=filterPiso==="TODOS"||e.piso===filterPiso;
       const ml=filterLote==="TODOS"||e.lote===filterLote;
-      const est=getEstado(`${e.torre}__${e.piso}__${e.pos}__${e.tipo}`);
+      const est=getEstado(elKeyOf(e));
       const me=filterEstado==="TODOS"||est===filterEstado;
       return ms&&mt&&mtr&&mp&&ml&&me;
     }).sort((a,b)=>{
@@ -1426,8 +1435,8 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
   const toMountKeys = Object.entries(elementActions).filter(([key,a])=>(a==="montado"||a==="ambos")&&!montadosPos.has(key)&&!montadosPending.has(key)).map(([key])=>key);
   const toReceiveCount = toReceiveKeys.length;
   const toMountCount = toMountKeys.length;
-  const toReceiveArea = elements.filter(e=>toReceiveKeys.includes(`${e.torre}__${e.piso}__${e.pos}__${e.tipo}`)).reduce((s,e)=>s+e.area,0);
-  const toMountArea = elements.filter(e=>toMountKeys.includes(`${e.torre}__${e.piso}__${e.pos}__${e.tipo}`)).reduce((s,e)=>s+e.area,0);
+  const toReceiveArea = elements.filter(e=>toReceiveKeys.includes(elKeyOf(e))).reduce((s,e)=>s+e.area,0);
+  const toMountArea = elements.filter(e=>toMountKeys.includes(elKeyOf(e))).reduce((s,e)=>s+e.area,0);
 
   if(loading) return <LoadingScreen/>;
 
@@ -1448,7 +1457,7 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
         </div>
         <div style={{ display:"flex", gap:6, flexWrap:"wrap", alignItems:"center" }}>
           <KPIBox label="RECIBIDOS" value={fmtPct(pctRec)} sub={fmt2(stats.areaReceived)+" m²"} color="#2563eb"/>
-          <KPIBox label="STOCK EN OBRA" value={elements.filter(e=>getEstado(`${e.torre}__${e.piso}__${e.pos}__${e.tipo}`)==="recibido").length+" elem"} sub={fmt2(elements.filter(e=>getEstado(`${e.torre}__${e.piso}__${e.pos}__${e.tipo}`)==="recibido").reduce((s,e)=>s+e.area,0))+" m²"} color="#f59e0b"/>
+          <KPIBox label="STOCK EN OBRA" value={elements.filter(e=>getEstado(elKeyOf(e))==="recibido").length+" elem"} sub={fmt2(elements.filter(e=>getEstado(elKeyOf(e))==="recibido").reduce((s,e)=>s+e.area,0))+" m²"} color="#f59e0b"/>
           <KPIBox label="MD/MDT" value={fmtPct(pctMD)} sub={fmt2(stats.md.areaMounted)+"/"+fmt2(stats.md.areaTotal)+" m²"} color="#16a34a"/>
           <KPIBox label="PRELOSAS" value={fmtPct(pctP)} sub={fmt2(stats.p.areaMounted)+"/"+fmt2(stats.p.areaTotal)+" m²"} color="#2563eb"/>
           <KPIBox label="AVANCE TOTAL" value={fmtPct(pctAll)} sub={fmt2(stats.all.areaMounted)+"/"+fmt2(stats.all.areaTotal)+" m²"} color="#d97706" large/>
@@ -1553,7 +1562,7 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
                   </thead>
                   <tbody key={`${filterTorre}-${filterTipo}-${filterPiso}-${filterLote}-${filterEstado}-${filterSearch}`}>
                     {filteredElements.map(el=>{
-                      const elKey = `${el.torre}__${el.piso}__${el.pos}__${el.tipo}`;
+                      const elKey = elKeyOf(el);
                       const estado = getEstado(elKey);
                       const isMounted  = estado==="montado";
                       const isReceived = estado==="recibido";
@@ -1638,8 +1647,8 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
         {activeTab==="elementos" && (
           <Panel title="INVENTARIO DE ELEMENTOS">
             <div style={{ display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:16 }}>
-              <StatCard label="PENDIENTES" value={elements.filter(e=>getEstado(`${e.torre}__${e.piso}__${e.pos}__${e.tipo}`)==="pendiente").length} sub={fmt2(elements.filter(e=>getEstado(`${e.torre}__${e.piso}__${e.pos}__${e.tipo}`)==="pendiente").reduce((s,e)=>s+e.area,0))+" m²"} color="#94a3b8"/>
-              <StatCard label="RECIBIDOS EN OBRA" value={elements.filter(e=>getEstado(`${e.torre}__${e.piso}__${e.pos}__${e.tipo}`)!=="pendiente").length} sub={fmt2(elements.filter(e=>getEstado(`${e.torre}__${e.piso}__${e.pos}__${e.tipo}`)!=="pendiente").reduce((s,e)=>s+e.area,0))+" m²"} color="#2563eb"/>
+              <StatCard label="PENDIENTES" value={elements.filter(e=>getEstado(elKeyOf(e))==="pendiente").length} sub={fmt2(elements.filter(e=>getEstado(elKeyOf(e))==="pendiente").reduce((s,e)=>s+e.area,0))+" m²"} color="#94a3b8"/>
+              <StatCard label="RECIBIDOS EN OBRA" value={elements.filter(e=>getEstado(elKeyOf(e))!=="pendiente").length} sub={fmt2(elements.filter(e=>getEstado(elKeyOf(e))!=="pendiente").reduce((s,e)=>s+e.area,0))+" m²"} color="#2563eb"/>
               <StatCard label="MONTADOS" value={montadosPos.size} sub={fmt2(stats.all.areaMounted)+" m²"} color="#16a34a"/>
               <StatCard label="% AVANCE" value={fmtPct(pctAll)} sub={fmt2(stats.all.areaMounted)+" / "+fmt2(stats.all.areaTotal)+" m²"} color="#d97706"/>
             </div>
@@ -1681,9 +1690,9 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
                 </thead>
                 <tbody key={`elem-${filterTorre}-${filterTipo}-${filterPiso}-${filterLote}-${filterEstado}-${filterSearch}-${elemPage}`}>
                   {filteredElements.slice(elemPage*ELEMS_PER_PAGE,(elemPage+1)*ELEMS_PER_PAGE).map(el=>{
-                    const estado=getEstado(`${el.torre}__${el.piso}__${el.pos}__${el.tipo}`);
-                    const logR=logs.find(l=>l.aprobado&&(l.recibidos.includes(`${el.torre}__${el.piso}__${el.pos}__${el.tipo}`)||l.recibidos.includes(`${el.pos}__${el.tipo}`)||l.recibidos.includes(el.pos)));
-                    const logM=logs.find(l=>l.aprobado&&(l.montados.includes(`${el.torre}__${el.piso}__${el.pos}__${el.tipo}`)||l.montados.includes(`${el.pos}__${el.tipo}`)||l.montados.includes(el.pos)));
+                    const estado=getEstado(elKeyOf(el));
+                    const logR=logs.find(l=>l.aprobado&&(l.recibidos.includes(elKeyOf(el))||l.recibidos.includes(`${el.pos}__${el.tipo}`)||l.recibidos.includes(el.pos)));
+                    const logM=logs.find(l=>l.aprobado&&(l.montados.includes(elKeyOf(el))||l.montados.includes(`${el.pos}__${el.tipo}`)||l.montados.includes(el.pos)));
                     const tc=TIPOS_MD.includes(el.tipo)?"#16a34a":"#2563eb";
                     const estadoConfig={montado:{bg:"#dcfce7",color:"#16a34a",label:"MONTADO"},recibido:{bg:"#dbeafe",color:"#2563eb",label:"RECIBIDO"},pendiente:{bg:"#f1f5f9",color:"#94a3b8",label:"PENDIENTE"}}[estado];
                     return (
@@ -1876,7 +1885,7 @@ function PlanoAvance({ elements, montadosPos }) {
     const elems = elements.filter(e=>e.torre===torre&&String(e.piso)===String(piso)&&e.tipo===tipo);
     if(elems.length===0) return 'empty';
     const mounted = elems.filter(e=>
-      montadosPos.has(`${e.torre}__${e.piso}__${e.pos}__${e.tipo}`)||
+      montadosPos.has(elKeyOf(e))||
       montadosPos.has(`${e.pos}__${e.tipo}`)||
       montadosPos.has(e.pos)
     );
