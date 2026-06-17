@@ -1,4 +1,3 @@
-// v2.1 - pos__tipo fix
 import React, { useState, useMemo, useEffect, useRef } from "react";
 import * as XLSX from "xlsx";
 
@@ -46,6 +45,20 @@ async function sbFetch(path, options={}) {
   if (!res.ok) throw new Error(await res.text());
   const text = await res.text();
   return text ? JSON.parse(text) : [];
+}
+
+// Supabase caps responses at 1000 rows by default. This fetches all rows for a
+// query by paginating with limit/offset until a partial (< 1000 row) page is returned.
+async function sbFetchAll(baseQuery) {
+  const all = [];
+  let offset = 0;
+  while(true) {
+    const batch = await sbFetch(`${baseQuery}&limit=1000&offset=${offset}`);
+    all.push(...batch);
+    if(batch.length < 1000) break;
+    offset += 1000;
+  }
+  return all;
 }
 
 const PERSONAL_CARGOS = [
@@ -586,24 +599,6 @@ function SelectScreen({ obras, onSelectObra, onAdminClick, onRefresh }) {
   );
 }
 
-// ── Admin Login ───────────────────────────────────────────────────────────────
-function AdminLogin({ pin, setPin, error, onLogin, onBack }) {
-  return (
-    <div style={{ minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center" }}>
-      <div style={{ background:"#f8fafc", border:"1px solid #cbd5e1", borderRadius:12, padding:32, width:320 }}>
-        <div style={{ fontFamily:"'Archivo Black',sans-serif", fontSize:16, color:"#d97706", marginBottom:4 }}>⚙ PANEL ADMIN</div>
-        <div style={{ fontSize:10, color:"#94a3b8", letterSpacing:2, marginBottom:20 }}>INGRESA TU PIN</div>
-        <input type="password" inputMode="numeric" value={pin} onChange={e=>setPin(e.target.value)} onKeyDown={e=>e.key==="Enter"&&onLogin()} placeholder="PIN numérico" style={{ ...inp, marginBottom:8, fontSize:18, letterSpacing:4, textAlign:"center" }}/>
-        {error && <div style={{ color:"#dc2626", fontSize:11, marginBottom:8, textAlign:"center" }}>PIN incorrecto</div>}
-        <div style={{ display:"flex", gap:8 }}>
-          <button onClick={onBack} style={{ ...btnSecondary, flex:1 }}>← Volver</button>
-          <button onClick={onLogin} style={{ ...btnPrimary, flex:1 }}>Entrar</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ── Admin Panel ───────────────────────────────────────────────────────────────
 function AdminPanel({ obras, onBack, onObraCreated, setError, onViewObra }) {
   const [tab, setTab] = useState("resumen");
@@ -731,17 +726,7 @@ function AdminPanel({ obras, onBack, onObraCreated, setError, onViewObra }) {
     try {
       const stats = await Promise.all(obrasActivas.map(async o => {
         const [elems, regs] = await Promise.all([
-          (async()=>{
-            const all=[];
-            let offset=0;
-            while(true){
-              const batch=await sbFetch(`elementos?obra_id=eq.${o.id}&select=pos,area,tipo,torre,piso&limit=1000&offset=${offset}`);
-              all.push(...batch);
-              if(batch.length<1000) break;
-              offset+=1000;
-            }
-            return all;
-          })(),
+          sbFetchAll(`elementos?obra_id=eq.${o.id}&select=pos,area,tipo,torre,piso`),
           sbFetch(`registros?obra_id=eq.${o.id}&select=fecha,elementos_montados,elementos_recibidos,aprobado`),
         ]);
         const aprobados = regs.filter(r=>r.aprobado);
@@ -775,8 +760,8 @@ function AdminPanel({ obras, onBack, onObraCreated, setError, onViewObra }) {
     try {
       const [obrasData, elementosData, registrosData, programaData, usuariosData, usuariosObrasData] = await Promise.all([
         sbFetch("obras?select=*"),
-        (async()=>{ const all=[]; let offset=0; while(true){ const b=await sbFetch(`elementos?select=*&limit=1000&offset=${offset}`); all.push(...b); if(b.length<1000) break; offset+=1000; } return all; })(),
-        (async()=>{ const all=[]; let offset=0; while(true){ const b=await sbFetch(`registros?select=*&limit=1000&offset=${offset}`); all.push(...b); if(b.length<1000) break; offset+=1000; } return all; })(),
+        sbFetchAll("elementos?select=*"),
+        sbFetchAll("registros?select=*"),
         sbFetch("programa?select=*"),
         sbFetch("usuarios?select=*"),
         sbFetch("usuarios_obras?select=*"),
@@ -1201,17 +1186,7 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
     setLoading(true);
     try {
       const [elemData,regData,progData] = await Promise.all([
-        (async () => {
-          const all = [];
-          let offset = 0;
-          while(true) {
-            const batch = await sbFetch(`elementos?obra_id=eq.${obra.id}&select=*&limit=1000&offset=${offset}`);
-            all.push(...batch);
-            if(batch.length < 1000) break;
-            offset += 1000;
-          }
-          return all;
-        })(),
+        sbFetchAll(`elementos?obra_id=eq.${obra.id}&select=*`),
         sbFetch(`registros?obra_id=eq.${obra.id}&select=*&order=fecha.asc`),
         sbFetch(`programa?obra_id=eq.${obra.id}&select=*&order=semana.asc`),
       ]);
@@ -1239,11 +1214,10 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
   const montadosPending = useMemo(()=>new Set(logs.filter(l=>!l.aprobado).flatMap(l=>l.montados)),[logs]);
   const recibidosPending= useMemo(()=>new Set(logs.filter(l=>!l.aprobado).flatMap(l=>l.recibidos)),[logs]);
 
-  const elK        = (el) => elKeyOf(el);
-  const isMontado  = (el) => { const k=elK(el); return montadosPos.has(k)||montadosPending.has(k); };
-  const isRecibido = (el) => { const k=elK(el); return recibidosPos.has(k)||recibidosPending.has(k); };
-  const isPendingM = (el) => montadosPending.has(elK(el));
-  const isPendingR = (el) => recibidosPending.has(elK(el));
+  const isMontado  = (el) => { const k=elKeyOf(el); return montadosPos.has(k)||montadosPending.has(k); };
+  const isRecibido = (el) => { const k=elKeyOf(el); return recibidosPos.has(k)||recibidosPending.has(k); };
+  const isPendingM = (el) => montadosPending.has(elKeyOf(el));
+  const isPendingR = (el) => recibidosPending.has(elKeyOf(el));
 
   function getEstado(key) {
     if(montadosPos.has(key)||montadosPending.has(key)) return "montado";
