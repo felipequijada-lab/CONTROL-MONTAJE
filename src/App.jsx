@@ -1168,6 +1168,7 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
   const [programa, setPrograma] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [selectedDate, setSelectedDate] = useState(TODAY);
   const [personal, setPersonal] = useState(defaultPersonal());
   const [note, setNote] = useState("");
@@ -1427,6 +1428,21 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
   const toReceiveArea = elements.filter(e=>toReceiveKeys.includes(elKeyOf(e))).reduce((s,e)=>s+e.area,0);
   const toMountArea = elements.filter(e=>toMountKeys.includes(elKeyOf(e))).reduce((s,e)=>s+e.area,0);
 
+  // Desglose por torre+tipo para el modal de confirmación
+  function desglosePorTorreTipo(keys) {
+    const els = elements.filter(e=>keys.includes(elKeyOf(e)));
+    const grupos = {};
+    els.forEach(e=>{
+      const k = `${e.torre}__${e.tipo}`;
+      if(!grupos[k]) grupos[k] = { torre:e.torre, tipo:e.tipo, count:0, area:0 };
+      grupos[k].count++;
+      grupos[k].area += e.area;
+    });
+    return Object.values(grupos).sort((a,b)=>(a.torre+a.tipo).localeCompare(b.torre+b.tipo));
+  }
+  const desgloseRecibir = desglosePorTorreTipo(toReceiveKeys);
+  const desgloseMontar  = desglosePorTorreTipo(toMountKeys);
+
   if(loading) return <LoadingScreen/>;
 
   return (
@@ -1498,7 +1514,7 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
                       {toMountCount>0&&<div style={{ color:"#16a34a",marginTop:3 }}>🔧 Montar: {toMountCount} elementos · {fmt2(toMountArea)} m²</div>}
                     </div>
                   )}
-                  <button onClick={registrar} disabled={pendingCount===0||saving} style={{ width:"100%",padding:"11px",marginTop:10,background:pendingCount>0&&!saving?"#d97706":"#e2e8f0",color:pendingCount>0&&!saving?"#fff":"#94a3b8",border:"none",borderRadius:6,cursor:pendingCount>0&&!saving?"pointer":"default",fontFamily:"'Archivo Black',sans-serif",fontSize:13,letterSpacing:1 }}>
+                  <button onClick={()=>setShowConfirmModal(true)} disabled={pendingCount===0||saving} style={{ width:"100%",padding:"11px",marginTop:10,background:pendingCount>0&&!saving?"#d97706":"#e2e8f0",color:pendingCount>0&&!saving?"#fff":"#94a3b8",border:"none",borderRadius:6,cursor:pendingCount>0&&!saving?"pointer":"default",fontFamily:"'Archivo Black',sans-serif",fontSize:13,letterSpacing:1 }}>
                     {saving?"GUARDANDO…":"▷ REGISTRAR"}
                   </button>
                 </Panel>
@@ -1855,6 +1871,51 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
           </div>
         )}
       </div>
+
+      {/* Modal de confirmación de registro */}
+      {showConfirmModal && (
+        <div style={{ position:"fixed",inset:0,background:"rgba(15,23,42,0.6)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1000,padding:16 }}>
+          <div style={{ background:"#fff",borderRadius:12,padding:24,width:"100%",maxWidth:480,maxHeight:"85vh",overflowY:"auto" }}>
+            <div style={{ fontFamily:"'Archivo Black',sans-serif",fontSize:16,color:"#1e293b",marginBottom:4 }}>¿Confirmas este registro?</div>
+            <div style={{ fontSize:11,color:"#64748b",marginBottom:16 }}>{selectedDate} — {obra.nombre}</div>
+
+            {toReceiveCount>0&&(
+              <div style={{ marginBottom:14 }}>
+                <div style={{ color:"#2563eb",fontSize:13,fontWeight:"bold",marginBottom:6 }}>📦 Recepción: {toReceiveCount} elementos · {fmt2(toReceiveArea)} m²</div>
+                <div style={{ background:"#eff6ff",borderRadius:8,padding:"8px 10px" }}>
+                  {desgloseRecibir.map((g,i)=>(
+                    <div key={i} style={{ display:"flex",justifyContent:"space-between",fontSize:11,color:"#1e40af",padding:"3px 0" }}>
+                      <span>Torre {g.torre} — {g.tipo}</span>
+                      <span>{g.count} elem · {fmt2(g.area)} m²</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {toMountCount>0&&(
+              <div style={{ marginBottom:14 }}>
+                <div style={{ color:"#16a34a",fontSize:13,fontWeight:"bold",marginBottom:6 }}>🔧 Montaje: {toMountCount} elementos · {fmt2(toMountArea)} m²</div>
+                <div style={{ background:"#f0fdf4",borderRadius:8,padding:"8px 10px" }}>
+                  {desgloseMontar.map((g,i)=>(
+                    <div key={i} style={{ display:"flex",justifyContent:"space-between",fontSize:11,color:"#15803d",padding:"3px 0" }}>
+                      <span>Torre {g.torre} — {g.tipo}</span>
+                      <span>{g.count} elem · {fmt2(g.area)} m²</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div style={{ display:"flex",gap:8,marginTop:18 }}>
+              <button onClick={()=>setShowConfirmModal(false)} disabled={saving} style={{ ...btnSecondary,flex:1 }}>← Revisar</button>
+              <button onClick={async()=>{ await registrar(); setShowConfirmModal(false); }} disabled={saving} style={{ flex:1,padding:"11px",background:saving?"#e2e8f0":"#d97706",color:saving?"#94a3b8":"#fff",border:"none",borderRadius:6,cursor:saving?"default":"pointer",fontFamily:"'Archivo Black',sans-serif",fontSize:13 }}>
+                {saving?"Guardando…":"Confirmar registro"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
