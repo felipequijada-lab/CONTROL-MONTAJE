@@ -20,6 +20,11 @@ function elMatchesKeys(el, keysSet) {
   return keysSet.has(elKeyOf(el)) || keysSet.has(`${el.pos}__${el.tipo}`) || keysSet.has(el.pos);
 }
 
+// Same matching logic but against a plain array of key strings (used for logs.montados / logs.recibidos).
+function elMatchesArr(el, keysArr) {
+  return keysArr.includes(elKeyOf(el)) || keysArr.includes(`${el.pos}__${el.tipo}`) || keysArr.includes(el.pos);
+}
+
 function getWeekNumber(dateStr) {
   const d = new Date(dateStr);
   const start = new Date(d.getFullYear(),0,1);
@@ -308,14 +313,12 @@ ${weekElements.map(el=>`<tr><td>${el.lote||""}</td><td>${el.torre||""}</td><td>$
 
     // Calculate totals from elements
     const totalAreaPDF = elements.reduce((s,e)=>s+e.area,0);
-    const mountedAreaPDF = elements.filter(e=>{
-      const k=elKeyOf(e);
-      return dailyStats.some(d=>d.aprobado&&(d.montados.includes(k)||d.montados.includes(`${e.pos}__${e.tipo}`)||d.montados.includes(e.pos)));
-    }).reduce((s,e)=>s+e.area,0);
-    const receivedAreaPDF = elements.filter(e=>{
-      const k=elKeyOf(e);
-      return dailyStats.some(d=>d.aprobado&&(d.recibidos.includes(k)||d.recibidos.includes(`${e.pos}__${e.tipo}`)||d.recibidos.includes(e.pos)||d.montados.includes(k)||d.montados.includes(`${e.pos}__${e.tipo}`)||d.montados.includes(e.pos)));
-    }).reduce((s,e)=>s+e.area,0);
+    const mountedAreaPDF = elements.filter(e=>
+      dailyStats.some(d=>d.aprobado&&elMatchesArr(e,d.montados))
+    ).reduce((s,e)=>s+e.area,0);
+    const receivedAreaPDF = elements.filter(e=>
+      dailyStats.some(d=>d.aprobado&&(elMatchesArr(e,d.recibidos)||elMatchesArr(e,d.montados)))
+    ).reduce((s,e)=>s+e.area,0);
 
     const pctReceived = totalAreaPDF>0?(receivedAreaPDF/totalAreaPDF)*100:0;
     const pctMounted  = totalAreaPDF>0?(mountedAreaPDF/totalAreaPDF)*100:0;
@@ -357,13 +360,11 @@ ${weeklyStats.map(w=>`<tr><td class="amber">${w.week}</td><td class="blue">${fmt
 </table></div>
 <div class="section"><div class="section-title">INVENTARIO — ELEMENTOS RECIBIDOS Y MONTADOS</div><table>
 <tr><th>LOTE</th><th>TORRE</th><th>PISO</th><th>TIPO</th><th>POSICIÓN</th><th>ÁREA m²</th><th>ESTADO</th><th>F. RECEPCIÓN</th><th>F. MONTAJE</th></tr>
-${elements.filter(el=>{
-  const k=elKeyOf(el);
-  return dailyStats.some(d=>d.aprobado&&(d.montados.includes(k)||d.montados.includes(`${el.pos}__${el.tipo}`)||d.montados.includes(el.pos)||d.recibidos.includes(k)||d.recibidos.includes(`${el.pos}__${el.tipo}`)||d.recibidos.includes(el.pos)));
-}).sort((a,b)=>(a.torre+a.piso+a.pos).localeCompare(b.torre+b.piso+b.pos)).map(el=>{
-  const k=elKeyOf(el);
-  const logM=dailyStats.find(d=>d.aprobado&&(d.montados.includes(k)||d.montados.includes(`${el.pos}__${el.tipo}`)||d.montados.includes(el.pos)));
-  const logR=dailyStats.find(d=>d.aprobado&&(d.recibidos.includes(k)||d.recibidos.includes(`${el.pos}__${el.tipo}`)||d.recibidos.includes(el.pos)));
+${elements.filter(el=>
+  dailyStats.some(d=>d.aprobado&&(elMatchesArr(el,d.montados)||elMatchesArr(el,d.recibidos)))
+).sort((a,b)=>(a.torre+a.piso+a.pos).localeCompare(b.torre+b.piso+b.pos)).map(el=>{
+  const logM=dailyStats.find(d=>d.aprobado&&elMatchesArr(el,d.montados));
+  const logR=dailyStats.find(d=>d.aprobado&&elMatchesArr(el,d.recibidos));
   const estado=logM?"MONTADO":"RECIBIDO";
   const color=logM?"green":"blue";
   return `<tr><td>${el.lote||""}</td><td>${el.torre||""}</td><td>${el.piso||""}</td><td class="${TIPOS_MD.includes(el.tipo)?"green":"blue"}">${el.tipo}</td><td>${el.pos}</td><td>${fmt2(el.area)}</td><td class="${color}">${estado}</td><td>${logR?.date||""}</td><td>${logM?.date||""}</td></tr>`;
@@ -409,9 +410,13 @@ function generateExcel(weekData, elements, dailyStats, weekLabel) {
   ];
   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(resumen),"Resumen");
   const elemRows=[["Lote","Torre","Piso","Tipo","Posición","Área m²","Fecha"]];
-  weekData.montados.forEach(pos=>{
-    const el=elements.find(e=>e.pos===pos);
-    const d=dailyStats.find(d=>d.montados.includes(pos));
+  weekData.montados.forEach(key=>{
+    const parts = key.split("__");
+    let el;
+    if(parts.length===4) el = elements.find(e=>elKeyOf(e)===key);
+    else if(parts.length===2) el = elements.find(e=>`${e.pos}__${e.tipo}`===key);
+    else el = elements.find(e=>e.pos===key);
+    const d=dailyStats.find(d=>d.montados.includes(key));
     if(el) elemRows.push([el.lote||"",el.torre||"",el.piso||"",el.tipo,el.pos,el.area,d?.date||""]);
   });
   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(elemRows),"Montados");
@@ -440,8 +445,8 @@ function generateFullExcel(elements, dailyStats, weeklyStats, obraName) {
   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(semRows),"Resumen Semanal");
   const invRows=[["Lote","Torre","Piso","Tipo","Posición","Área m²","Estado","F. Recepción","F. Montaje"]];
   elements.forEach(el=>{
-    const logM=dailyStats.find(d=>d.montados.includes(el.pos));
-    const logR=dailyStats.find(d=>d.recibidos.includes(el.pos));
+    const logM=dailyStats.find(d=>elMatchesArr(el,d.montados));
+    const logR=dailyStats.find(d=>elMatchesArr(el,d.recibidos));
     invRows.push([el.lote||"",el.torre||"",el.piso||"",el.tipo,el.pos,el.area,logM?"Montado":logR?"Recibido":"Pendiente",logR?.date||"",logM?.date||""]);
   });
   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(invRows),"Inventario");
@@ -743,9 +748,8 @@ function AdminPanel({ obras, onBack, onObraCreated, setError, onViewObra }) {
         const montadosPos = new Set(aprobados.flatMap(r=>r.elementos_montados?r.elementos_montados.split(",").map(p=>p.trim()).filter(Boolean):[]));
         const recibidosPos = new Set(aprobados.flatMap(r=>r.elementos_recibidos?r.elementos_recibidos.split(",").map(p=>p.trim()).filter(Boolean):[]));
         const totalArea = elems.reduce((s,e)=>s+e.area,0);
-        const chkM = (e,keys) => keys.has(elKeyOf(e))||keys.has(`${e.pos}__${e.tipo}`)||keys.has(e.pos);
-        const mountedArea = elems.filter(e=>chkM(e,montadosPos)).reduce((s,e)=>s+e.area,0);
-        const receivedArea = elems.filter(e=>chkM(e,recibidosPos)||chkM(e,montadosPos)).reduce((s,e)=>s+e.area,0);
+        const mountedArea = elems.filter(e=>elMatchesKeys(e,montadosPos)).reduce((s,e)=>s+e.area,0);
+        const receivedArea = elems.filter(e=>elMatchesKeys(e,recibidosPos)||elMatchesKeys(e,montadosPos)).reduce((s,e)=>s+e.area,0);
 
         // Weekly breakdown
         const weekMap = {};
@@ -753,7 +757,7 @@ function AdminPanel({ obras, onBack, onObraCreated, setError, onViewObra }) {
           const week = getWeekNumber(r.fecha);
           if(!weekMap[week]) weekMap[week] = 0;
           const elPos = new Set(r.elementos_montados?r.elementos_montados.split(",").map(p=>p.trim()).filter(Boolean):[]);
-          weekMap[week] += elems.filter(e=>chkM(e,elPos)).reduce((s,e)=>s+e.area,0);
+          weekMap[week] += elems.filter(e=>elMatchesKeys(e,elPos)).reduce((s,e)=>s+e.area,0);
         });
 
         return { obra:o, totalArea, mountedArea, receivedArea, pctMounted:totalArea>0?(mountedArea/totalArea)*100:0, pctReceived:totalArea>0?(receivedArea/totalArea)*100:0, weekMap };
@@ -1348,13 +1352,13 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
       map[l.date].note=l.note||map[l.date].note;
     });
     return Object.values(map).map(d=>{
-      const elems=elements.filter(e=>d.montados.includes(elKeyOf(e))||d.montados.includes(`${e.pos}__${e.tipo}`)||d.montados.includes(e.pos));
+      const elems=elements.filter(e=>elMatchesArr(e,d.montados));
       const mdEl=elems.filter(e=>TIPOS_MD.includes(e.tipo));
       const pEl=elems.filter(e=>e.tipo==="P");
       const areaMD=mdEl.reduce((s,e)=>s+e.area,0);
       const areaP=pEl.reduce((s,e)=>s+e.area,0);
       const areaTotal=areaMD+areaP;
-      const areaRecibida=elements.filter(e=>d.recibidos.includes(elKeyOf(e))||d.recibidos.includes(`${e.pos}__${e.tipo}`)||d.recibidos.includes(e.pos)).reduce((s,e)=>s+e.area,0);
+      const areaRecibida=elements.filter(e=>elMatchesArr(e,d.recibidos)).reduce((s,e)=>s+e.area,0);
       const p=d.personal;
       const eq=(p.coordinadores||0)+(p.calidad||0)+(p.lideres||0)+(p.montajistas||0)+(p.ayudantes||0);
       const gruas=p.gruas||p.lideres||1;
@@ -1691,8 +1695,8 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
                 <tbody key={`elem-${filterTorre}-${filterTipo}-${filterPiso}-${filterLote}-${filterEstado}-${filterSearch}-${elemPage}`}>
                   {filteredElements.slice(elemPage*ELEMS_PER_PAGE,(elemPage+1)*ELEMS_PER_PAGE).map(el=>{
                     const estado=getEstado(elKeyOf(el));
-                    const logR=logs.find(l=>l.aprobado&&(l.recibidos.includes(elKeyOf(el))||l.recibidos.includes(`${el.pos}__${el.tipo}`)||l.recibidos.includes(el.pos)));
-                    const logM=logs.find(l=>l.aprobado&&(l.montados.includes(elKeyOf(el))||l.montados.includes(`${el.pos}__${el.tipo}`)||l.montados.includes(el.pos)));
+                    const logR=logs.find(l=>l.aprobado&&elMatchesArr(el,l.recibidos));
+                    const logM=logs.find(l=>l.aprobado&&elMatchesArr(el,l.montados));
                     const tc=TIPOS_MD.includes(el.tipo)?"#16a34a":"#2563eb";
                     const estadoConfig={montado:{bg:"#dcfce7",color:"#16a34a",label:"MONTADO"},recibido:{bg:"#dbeafe",color:"#2563eb",label:"RECIBIDO"},pendiente:{bg:"#f1f5f9",color:"#94a3b8",label:"PENDIENTE"}}[estado];
                     return (
@@ -1884,11 +1888,7 @@ function PlanoAvance({ elements, montadosPos }) {
   function getCellStatus(torre, piso, tipo) {
     const elems = elements.filter(e=>e.torre===torre&&String(e.piso)===String(piso)&&e.tipo===tipo);
     if(elems.length===0) return 'empty';
-    const mounted = elems.filter(e=>
-      montadosPos.has(elKeyOf(e))||
-      montadosPos.has(`${e.pos}__${e.tipo}`)||
-      montadosPos.has(e.pos)
-    );
+    const mounted = elems.filter(e=>elMatchesKeys(e,montadosPos));
     const pct = mounted.length/elems.length;
     if(pct===0) return 'pendiente';
     if(pct===1) return 'completo';
