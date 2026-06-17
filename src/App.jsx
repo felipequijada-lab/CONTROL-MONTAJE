@@ -736,16 +736,20 @@ function AdminPanel({ obras, onBack, onObraCreated, setError, onViewObra }) {
         const mountedArea = elems.filter(e=>elMatchesKeys(e,montadosPos)).reduce((s,e)=>s+e.area,0);
         const receivedArea = elems.filter(e=>elMatchesKeys(e,recibidosPos)||elMatchesKeys(e,montadosPos)).reduce((s,e)=>s+e.area,0);
 
-        // Weekly breakdown
+        // Weekly breakdown — montados y recibidos (despachados) por semana
         const weekMap = {};
+        const weekMapRecibidos = {};
         aprobados.forEach(r=>{
           const week = getWeekNumber(r.fecha);
           if(!weekMap[week]) weekMap[week] = 0;
-          const elPos = new Set(r.elementos_montados?r.elementos_montados.split(",").map(p=>p.trim()).filter(Boolean):[]);
-          weekMap[week] += elems.filter(e=>elMatchesKeys(e,elPos)).reduce((s,e)=>s+e.area,0);
+          if(!weekMapRecibidos[week]) weekMapRecibidos[week] = 0;
+          const elPosMontados = new Set(r.elementos_montados?r.elementos_montados.split(",").map(p=>p.trim()).filter(Boolean):[]);
+          const elPosRecibidos = new Set(r.elementos_recibidos?r.elementos_recibidos.split(",").map(p=>p.trim()).filter(Boolean):[]);
+          weekMap[week] += elems.filter(e=>elMatchesKeys(e,elPosMontados)).reduce((s,e)=>s+e.area,0);
+          weekMapRecibidos[week] += elems.filter(e=>elMatchesKeys(e,elPosRecibidos)).reduce((s,e)=>s+e.area,0);
         });
 
-        return { obra:o, totalArea, mountedArea, receivedArea, pctMounted:totalArea>0?(mountedArea/totalArea)*100:0, pctReceived:totalArea>0?(receivedArea/totalArea)*100:0, weekMap };
+        return { obra:o, totalArea, mountedArea, receivedArea, pctMounted:totalArea>0?(mountedArea/totalArea)*100:0, pctReceived:totalArea>0?(receivedArea/totalArea)*100:0, weekMap, weekMapRecibidos };
       }));
 
       // Get all weeks
@@ -903,6 +907,13 @@ function AdminPanel({ obras, onBack, onObraCreated, setError, onViewObra }) {
                     </tbody>
                   </table>
                 </Panel>
+
+                {/* Gráfico consolidado: despachado vs montado, todas las obras, por semana */}
+                {weekColumns.length>0&&(
+                  <Panel title="DESPACHADO vs MONTADO — TODAS LAS OBRAS, POR SEMANA">
+                    <ConsolidadoSemanal adminStats={adminStats} weekColumns={weekColumns}/>
+                  </Panel>
+                )}
 
                 {/* Tabla semanal */}
                 {weekColumns.length>0&&(
@@ -1927,6 +1938,106 @@ function PlanoAvance({ elements, montadosPos }) {
       </div>
     </div>
   );
+}
+
+// ── Consolidado Semanal (todas las obras) ──────────────────────────────────────
+function ConsolidadoSemanal({ adminStats, weekColumns }) {
+  const canvasRef = useRef();
+
+  const data = useMemo(() => {
+    return weekColumns.map(week => ({
+      week,
+      despachado: adminStats.reduce((s,a)=>s+(a.weekMapRecibidos?.[week]||0),0),
+      montado: adminStats.reduce((s,a)=>s+(a.weekMap?.[week]||0),0),
+    }));
+  }, [adminStats, weekColumns]);
+
+  useEffect(()=>{
+    const canvas = canvasRef.current; if(!canvas) return;
+    const dpr = window.devicePixelRatio||1;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width*dpr; canvas.height = rect.height*dpr;
+    const ctx = canvas.getContext('2d');
+    ctx.scale(dpr,dpr);
+    const W=rect.width, H=rect.height;
+    const padL=70, padR=20, padT=36, padB=46;
+    const cW=W-padL-padR, cH=H-padT-padB;
+    const n=data.length;
+
+    ctx.clearRect(0,0,W,H); ctx.fillStyle='#f8fafc'; ctx.fillRect(0,0,W,H);
+
+    if(n===0){
+      ctx.fillStyle='#94a3b8'; ctx.font='12px monospace'; ctx.textAlign='center';
+      ctx.fillText('Sin datos aprobados aún', W/2, H/2);
+      return;
+    }
+
+    const maxVal = Math.max(...data.map(d=>Math.max(d.despachado,d.montado)),100);
+    const maxAxis = Math.ceil(maxVal/500)*500;
+
+    // Grid + left axis (every 500)
+    const ticks = Math.max(1, Math.round(maxAxis/500));
+    for(let i=0;i<=ticks;i++){
+      const y = padT+cH*(1-i/ticks);
+      ctx.strokeStyle='#e2e8f0'; ctx.lineWidth=1;
+      ctx.beginPath(); ctx.moveTo(padL,y); ctx.lineTo(padL+cW,y); ctx.stroke();
+      ctx.fillStyle='#475569'; ctx.font='10px monospace'; ctx.textAlign='right';
+      ctx.fillText(Math.round(maxAxis*(i/ticks)), padL-8, y+4);
+    }
+
+    const innerPad = Math.max(20, cW/(n*2));
+    const xPos = (i) => padL+innerPad+(n<=1?cW-innerPad*2:((cW-innerPad*2)/(n-1))*i);
+    const slotW = n>1 ? (cW-innerPad*2)/(n-1) : cW;
+    const bW = Math.max(8, Math.min(40, slotW*0.45));
+
+    // Bars: despachado
+    data.forEach((d,i)=>{
+      const x = xPos(i);
+      const h = (d.despachado/maxAxis)*cH;
+      ctx.fillStyle='rgba(37,99,235,0.55)';
+      ctx.fillRect(x-bW/2, padT+cH-h, bW, h);
+    });
+
+    // X labels
+    data.forEach((d,i)=>{
+      const x = xPos(i);
+      ctx.fillStyle='#475569'; ctx.font='10px monospace'; ctx.textAlign='center';
+      ctx.fillText('S'+d.week.split('.')[0], x, padT+cH+16);
+      ctx.fillStyle='#94a3b8'; ctx.font='9px monospace';
+      ctx.fillText(d.week.split('.')[1]||'', x, padT+cH+28);
+    });
+
+    // Line: montado
+    ctx.strokeStyle='#16a34a'; ctx.lineWidth=3;
+    ctx.beginPath();
+    data.forEach((d,i)=>{ const x=xPos(i), y=padT+cH*(1-d.montado/maxAxis); i===0?ctx.moveTo(x,y):ctx.lineTo(x,y); });
+    ctx.stroke();
+    data.forEach((d,i)=>{
+      const x=xPos(i), y=padT+cH*(1-d.montado/maxAxis);
+      ctx.fillStyle='#16a34a'; ctx.beginPath(); ctx.arc(x,y,5,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(x,y,2.5,0,Math.PI*2); ctx.fill();
+      if(d.montado>0){
+        ctx.fillStyle='#15803d'; ctx.font='bold 9px monospace'; ctx.textAlign='center';
+        ctx.fillText(Math.round(d.montado), x, y-11);
+      }
+    });
+
+    // Legend
+    ctx.fillStyle='rgba(37,99,235,0.55)'; ctx.fillRect(padL,12,12,10);
+    ctx.fillStyle='#64748b'; ctx.font='10px monospace'; ctx.textAlign='left';
+    ctx.fillText('Despachado (todas las obras)', padL+16, 21);
+    ctx.strokeStyle='#16a34a'; ctx.lineWidth=3;
+    ctx.beginPath(); ctx.moveTo(padL+230,16); ctx.lineTo(padL+255,16); ctx.stroke();
+    ctx.fillStyle='#16a34a'; ctx.fillText('Montado (todas las obras)', padL+260, 21);
+
+    // Axis label
+    ctx.save(); ctx.translate(14,padT+cH/2); ctx.rotate(-Math.PI/2);
+    ctx.fillStyle='#94a3b8'; ctx.font='10px monospace'; ctx.textAlign='center';
+    ctx.fillText('m² por semana',0,0); ctx.restore();
+
+  },[data]);
+
+  return <canvas ref={canvasRef} style={{ width:"100%", maxWidth:900, height:300, display:"block" }}/>;
 }
 
 // ── Barras Semanales ──────────────────────────────────────────────────────────
