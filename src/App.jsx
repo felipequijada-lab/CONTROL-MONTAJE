@@ -1169,6 +1169,8 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [editingDay, setEditingDay] = useState(null); // {date, ids, personal, note, montados, recibidos}
+  const [editSaving, setEditSaving] = useState(false);
   const [selectedDate, setSelectedDate] = useState(TODAY);
   const [personal, setPersonal] = useState(defaultPersonal());
   const [note, setNote] = useState("");
@@ -1209,7 +1211,7 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
         // For old format, try to find the element and reconstruct the key
         const rawMontados=(row.elementos_montados||"").split(",").map(p=>p.trim()).filter(Boolean);
         const rawRecibidos=(row.elementos_recibidos||"").split(",").map(p=>p.trim()).filter(Boolean);
-        expanded.push({date:row.fecha,montados:rawMontados,recibidos:rawRecibidos,aprobado:row.aprobado===true||row.aprobado==="true",personal:{coordinadores:row.coordinadores||0,calidad:row.calidad||0,gruas:row.gruas||0,lideres:row.lideres||0,montajistas:row.montajistas||0,ayudantes:row.ayudantes||0},note:row.incidencias||""});
+        expanded.push({id:row.id,date:row.fecha,montados:rawMontados,recibidos:rawRecibidos,aprobado:row.aprobado===true||row.aprobado==="true",personal:{coordinadores:row.coordinadores||0,calidad:row.calidad||0,gruas:row.gruas||0,lideres:row.lideres||0,montajistas:row.montajistas||0,ayudantes:row.ayudantes||0},note:row.incidencias||""});
       });
       setLogs(expanded);
       setPrograma(progData);
@@ -1296,6 +1298,40 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
     } catch(e){ setError("Error: "+e.message); }
   }
 
+  function abrirEdicionDia(d) {
+    if(!d.ids || d.ids.length!==1) {
+      setError("Este día tiene múltiples registros separados — edítalos eliminando y volviendo a registrar, o contacta soporte para casos especiales.");
+      return;
+    }
+    setEditingDay({
+      id: d.ids[0],
+      date: d.date,
+      personal: {...d.personal},
+      note: d.note||"",
+      montados: [...d.montados],
+      recibidos: [...d.recibidos],
+    });
+  }
+
+  async function guardarEdicionDia() {
+    if(!editingDay) return;
+    setEditSaving(true);
+    try {
+      const mdEls = elements.filter(e=>elMatchesArr(e,editingDay.montados)&&TIPOS_MD.includes(e.tipo));
+      const pEls  = elements.filter(e=>elMatchesArr(e,editingDay.montados)&&e.tipo==="P");
+      await sbFetch(`registros?id=eq.${editingDay.id}`,{method:"PATCH",body:JSON.stringify({
+        coordinadores:editingDay.personal.coordinadores,calidad:editingDay.personal.calidad,gruas:editingDay.personal.gruas,
+        lideres:editingDay.personal.lideres,montajistas:editingDay.personal.montajistas,ayudantes:editingDay.personal.ayudantes,
+        m2_md:mdEls.reduce((s,e)=>s+e.area,0),m2_p:pEls.reduce((s,e)=>s+e.area,0),
+        elementos_montados:editingDay.montados.join(","),elementos_recibidos:editingDay.recibidos.join(","),
+        incidencias:editingDay.note,
+      })});
+      setLogs(prev=>prev.map(l=>l.id===editingDay.id?{...l,personal:{...editingDay.personal},note:editingDay.note,montados:[...editingDay.montados],recibidos:[...editingDay.recibidos]}:l));
+      setEditingDay(null);
+    } catch(e){ setError("Error al guardar edición: "+e.message); }
+    setEditSaving(false);
+  }
+
   async function desmontarAdmin(pos, tipo) {
     if(!isAdmin) return;
     if(!window.confirm(`¿${tipo==="montado"?"Desmontar":"Desrecibir"} posición ${pos}?`)) return;
@@ -1331,11 +1367,12 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
   const dailyStats = useMemo(()=>{
     const map={};
     logs.forEach(l=>{
-      if(!map[l.date]) map[l.date]={date:l.date,montados:[],recibidos:[],aprobado:true,personal:l.personal,note:l.note};
+      if(!map[l.date]) map[l.date]={date:l.date,montados:[],recibidos:[],aprobado:true,personal:l.personal,note:l.note,ids:[]};
       if(!l.aprobado) map[l.date].aprobado=false;
       map[l.date].montados.push(...l.montados);
       map[l.date].recibidos.push(...l.recibidos);
       map[l.date].note=l.note||map[l.date].note;
+      if(l.id) map[l.date].ids.push(l.id);
     });
     return Object.values(map).map(d=>{
       const elems=elements.filter(e=>elMatchesArr(e,d.montados));
@@ -1738,6 +1775,7 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
                     <div style={{ display:"flex",gap:6,alignItems:"center" }}>
                       <span style={{ color:"#94a3b8",fontSize:10 }}>Sem. {getWeekNumber(d.date)}</span>
                       <span style={{ fontSize:9,padding:"1px 6px",borderRadius:8,background:d.aprobado?"#dcfce7":"#fef9c3",color:d.aprobado?"#16a34a":"#d97706" }}>{d.aprobado?"✓ Aprobado":"⏳ Pendiente"}</span>
+                      {isAdmin&&<button onClick={()=>abrirEdicionDia(d)} style={{ background:"#dbeafe",color:"#2563eb",border:"none",borderRadius:4,padding:"2px 8px",cursor:"pointer",fontFamily:"'DM Mono',monospace",fontSize:9 }}>✎ Editar</button>}
                       {isAdmin&&<button onClick={()=>eliminarRegistroDia(d.date)} style={{ background:"#fee2e2",color:"#dc2626",border:"none",borderRadius:4,padding:"2px 8px",cursor:"pointer",fontFamily:"'DM Mono',monospace",fontSize:9 }}>✕ Eliminar</button>}
                     </div>
                   </div>
@@ -1871,6 +1909,60 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
           </div>
         )}
       </div>
+
+      {/* Modal de edición de registro (admin) */}
+      {editingDay && (
+        <div style={{ position:"fixed",inset:0,background:"rgba(15,23,42,0.6)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1000,padding:16 }}>
+          <div style={{ background:"#fff",borderRadius:12,padding:24,width:"100%",maxWidth:560,maxHeight:"85vh",overflowY:"auto" }}>
+            <div style={{ fontFamily:"'Archivo Black',sans-serif",fontSize:16,color:"#1e293b",marginBottom:4 }}>✎ Editar registro</div>
+            <div style={{ fontSize:11,color:"#64748b",marginBottom:16 }}>{editingDay.date} — {obra.nombre}</div>
+
+            <div style={{ fontSize:9,color:"#94a3b8",letterSpacing:2,marginBottom:8 }}>PERSONAL</div>
+            <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:16 }}>
+              {PERSONAL_CARGOS.map(cargo=>(
+                <div key={cargo.key}>
+                  <Label>{cargo.label}</Label>
+                  <input type="number" min={0} max={cargo.max} value={editingDay.personal[cargo.key]||0}
+                    onChange={e=>setEditingDay(prev=>({...prev,personal:{...prev.personal,[cargo.key]:Math.max(0,parseInt(e.target.value)||0)}}))}
+                    style={{ ...inp,margin:0 }}/>
+                </div>
+              ))}
+            </div>
+
+            <Label>Observaciones / Incidencias</Label>
+            <textarea value={editingDay.note} onChange={e=>setEditingDay(prev=>({...prev,note:e.target.value}))} style={{ ...inp,minHeight:60,resize:"vertical",marginBottom:16 }}/>
+
+            <div style={{ fontSize:9,color:"#94a3b8",letterSpacing:2,marginBottom:8 }}>ELEMENTOS DEL DÍA</div>
+            <div style={{ display:"flex",gap:16,marginBottom:10,fontSize:11 }}>
+              <span style={{ color:"#2563eb" }}>📦 Recibidos: {editingDay.recibidos.length}</span>
+              <span style={{ color:"#16a34a" }}>🔧 Montados: {editingDay.montados.length}</span>
+            </div>
+            <div style={{ maxHeight:220,overflowY:"auto",border:"1px solid #e2e8f0",borderRadius:8,padding:8 }}>
+              {elements.filter(e=>elMatchesArr(e,editingDay.recibidos)||elMatchesArr(e,editingDay.montados)).sort((a,b)=>(a.torre+a.piso+a.pos).localeCompare(b.torre+b.piso+b.pos)).map(el=>{
+                const key = elKeyOf(el);
+                const isM = elMatchesArr(el,editingDay.montados);
+                const isR = elMatchesArr(el,editingDay.recibidos);
+                return (
+                  <div key={key} style={{ display:"flex",justifyContent:"space-between",alignItems:"center",padding:"4px 0",borderBottom:"1px solid #f1f5f9",fontSize:10 }}>
+                    <span>{el.torre} P{el.piso} · {el.tipo} · {el.pos} ({fmt2(el.area)} m²)</span>
+                    <div style={{ display:"flex",gap:6 }}>
+                      <button onClick={()=>setEditingDay(prev=>({...prev,recibidos:isR?prev.recibidos.filter(k=>k!==key):[...prev.recibidos,key]}))} style={{ fontSize:9,padding:"2px 6px",borderRadius:4,border:"none",cursor:"pointer",background:isR?"#dbeafe":"#f1f5f9",color:isR?"#2563eb":"#94a3b8" }}>📦 {isR?"✓":"—"}</button>
+                      <button onClick={()=>setEditingDay(prev=>({...prev,montados:isM?prev.montados.filter(k=>k!==key):[...prev.montados,key],recibidos:isM?prev.recibidos:[...new Set([...prev.recibidos,key])]}))} style={{ fontSize:9,padding:"2px 6px",borderRadius:4,border:"none",cursor:"pointer",background:isM?"#dcfce7":"#f1f5f9",color:isM?"#16a34a":"#94a3b8" }}>🔧 {isM?"✓":"—"}</button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div style={{ display:"flex",gap:8,marginTop:18 }}>
+              <button onClick={()=>setEditingDay(null)} disabled={editSaving} style={{ ...btnSecondary,flex:1 }}>Cancelar</button>
+              <button onClick={guardarEdicionDia} disabled={editSaving} style={{ flex:1,padding:"11px",background:editSaving?"#e2e8f0":"#2563eb",color:editSaving?"#94a3b8":"#fff",border:"none",borderRadius:6,cursor:editSaving?"default":"pointer",fontFamily:"'Archivo Black',sans-serif",fontSize:13 }}>
+                {editSaving?"Guardando…":"Guardar cambios"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal de confirmación de registro */}
       {showConfirmModal && (
