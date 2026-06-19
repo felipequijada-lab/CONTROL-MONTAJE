@@ -725,9 +725,10 @@ function AdminPanel({ obras, onBack, onObraCreated, setError, onViewObra }) {
     setLoadingStats(true);
     try {
       const stats = await Promise.all(obrasActivas.map(async o => {
-        const [elems, regs] = await Promise.all([
+        const [elems, regs, progData] = await Promise.all([
           sbFetchAll(`elementos?obra_id=eq.${o.id}&select=pos,area,tipo,torre,piso`),
           sbFetch(`registros?obra_id=eq.${o.id}&select=fecha,elementos_montados,elementos_recibidos,aprobado`),
+          sbFetch(`programa?obra_id=eq.${o.id}&select=*&order=semana.asc`),
         ]);
         const aprobados = regs.filter(r=>r.aprobado);
         const montadosPos = new Set(aprobados.flatMap(r=>r.elementos_montados?r.elementos_montados.split(",").map(p=>p.trim()).filter(Boolean):[]));
@@ -749,7 +750,14 @@ function AdminPanel({ obras, onBack, onObraCreated, setError, onViewObra }) {
           weekMapRecibidos[week] += elems.filter(e=>elMatchesKeys(e,elPosRecibidos)).reduce((s,e)=>s+e.area,0);
         });
 
-        return { obra:o, totalArea, mountedArea, receivedArea, pctMounted:totalArea>0?(mountedArea/totalArea)*100:0, pctReceived:totalArea>0?(receivedArea/totalArea)*100:0, weekMap, weekMapRecibidos };
+        // Cumplimiento vs programa: % real acumulado / % programado acumulado, a la semana actual
+        const currentWeek = getWeekNumber(TODAY);
+        const progHastaHoy = progData.filter(p=>p.semana<=currentWeek);
+        const programadoAcum = progHastaHoy.reduce((s,p)=>s+(p.meta||0),0);
+        const realAcum = mountedArea; // total montado a la fecha (todo lo aprobado hasta ahora)
+        const cumplimientoPct = programadoAcum>0 ? (realAcum/programadoAcum)*100 : null;
+
+        return { obra:o, totalArea, mountedArea, receivedArea, pctMounted:totalArea>0?(mountedArea/totalArea)*100:0, pctReceived:totalArea>0?(receivedArea/totalArea)*100:0, weekMap, weekMapRecibidos, programadoAcum, cumplimientoPct };
       }));
 
       // Get all weeks
@@ -877,13 +885,13 @@ function AdminPanel({ obras, onBack, onObraCreated, setError, onViewObra }) {
             {loadingStats ? <div style={{ color:"#94a3b8",textAlign:"center",padding:40 }}>Cargando datos…</div> : (
               <>
                 {/* Resumen por obra */}
-                <Panel title="RESUMEN POR OBRA">
+                <Panel title="RESUMEN POR OBRA — COMPARATIVO">
                   <table style={{ width:"100%",borderCollapse:"collapse",fontSize:11 }}>
                     <thead><tr style={{ background:"#f1f5f9" }}>
-                      <Th>OBRA</Th><Th>m² TOTAL</Th><Th>m² RECIBIDOS</Th><Th>% RECEPCIÓN</Th><Th>m² MONTADOS</Th><Th>% AVANCE</Th><Th>ACCIÓN</Th>
+                      <Th>OBRA</Th><Th>m² TOTAL</Th><Th>m² RECIBIDOS</Th><Th>% RECEPCIÓN</Th><Th>m² MONTADOS</Th><Th>% AVANCE</Th><Th>CUMPLIM. PROGRAMA</Th><Th>ACCIÓN</Th>
                     </tr></thead>
                     <tbody>
-                      {adminStats.map(s=>(
+                      {[...adminStats].sort((a,b)=>(a.cumplimientoPct??999)-(b.cumplimientoPct??999)).map(s=>(
                         <tr key={s.obra.id} style={{ borderBottom:"1px solid #f1f5f9",background:"#fff" }}>
                           <Td accent="#1e293b">{s.obra.nombre}</Td>
                           <Td>{fmt2(s.totalArea)}</Td>
@@ -891,6 +899,12 @@ function AdminPanel({ obras, onBack, onObraCreated, setError, onViewObra }) {
                           <Td><ProgressCell pct={s.pctReceived} color="#2563eb"/></Td>
                           <Td accent="#16a34a">{fmt2(s.mountedArea)}</Td>
                           <Td><ProgressCell pct={s.pctMounted} color="#16a34a"/></Td>
+                          <Td>
+                            {s.cumplimientoPct===null ? <span style={{ color:"#94a3b8",fontSize:10 }}>Sin programa</span> :
+                              <span style={{ fontWeight:"bold",color:s.cumplimientoPct>=100?"#16a34a":s.cumplimientoPct>=85?"#d97706":"#dc2626" }}>
+                                {fmtPct(s.cumplimientoPct)} {s.cumplimientoPct>=100?"✓":s.cumplimientoPct>=85?"⚠":"⚠"}
+                              </span>}
+                          </Td>
                           <Td><button onClick={()=>onViewObra(s.obra)} style={{ ...btnSecondary,padding:"4px 10px",fontSize:10 }}>Ver detalle →</button></Td>
                         </tr>
                       ))}
@@ -901,11 +915,12 @@ function AdminPanel({ obras, onBack, onObraCreated, setError, onViewObra }) {
                           <Td accent="#2563eb">{fmt2(adminStats.reduce((s,a)=>s+a.receivedArea,0))}</Td>
                           <Td></Td>
                           <Td accent="#16a34a">{fmt2(adminStats.reduce((s,a)=>s+a.mountedArea,0))}</Td>
-                          <Td></Td><Td></Td>
+                          <Td></Td><Td></Td><Td></Td>
                         </tr>
                       )}
                     </tbody>
                   </table>
+                  <div style={{ fontSize:9,color:"#94a3b8",marginTop:8 }}>Cumplimiento = m² montados acumulados / m² programados acumulados a la fecha. Ordenado de menor a mayor cumplimiento.</div>
                 </Panel>
 
                 {/* Gráfico consolidado: despachado vs montado, todas las obras, por semana */}
@@ -1171,6 +1186,7 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [editingDay, setEditingDay] = useState(null); // {date, ids, personal, note, montados, recibidos}
   const [editSaving, setEditSaving] = useState(false);
+  const [toast, setToast] = useState(null);
   const [selectedDate, setSelectedDate] = useState(TODAY);
   const [personal, setPersonal] = useState(defaultPersonal());
   const [note, setNote] = useState("");
@@ -1182,6 +1198,7 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
 
   // Filters
   const [filterSearch, setFilterSearch] = useState("");
+  const [incidenciasSearch, setIncidenciasSearch] = useState("");
   const [elemPage, setElemPage] = useState(0);
   const ELEMS_PER_PAGE = 100;
   const [filterTipo,   setFilterTipo]   = useState("TODOS");
@@ -1273,7 +1290,7 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
       // toMount/toReceive contain pos__tipo keys
       const mdEls = elements.filter(e=>toMount.includes(elKeyOf(e))&&TIPOS_MD.includes(e.tipo));
       const pEls  = elements.filter(e=>toMount.includes(elKeyOf(e))&&e.tipo==="P");
-      await sbFetch("registros",{method:"POST",body:JSON.stringify({
+      const inserted = await sbFetch("registros",{method:"POST",body:JSON.stringify({
         fecha:selectedDate,obra_id:obra.id,
         coordinadores:personal.coordinadores,calidad:personal.calidad,gruas:personal.gruas,lideres:personal.lideres,montajistas:personal.montajistas,ayudantes:personal.ayudantes,
         m2_md:mdEls.reduce((s,e)=>s+e.area,0),m2_p:pEls.reduce((s,e)=>s+e.area,0),
@@ -1281,9 +1298,11 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
         incidencias:note,registrado_por:currentUser?.nombre||"encargado",
         aprobado:false,
       })});
-      setLogs(prev=>[...prev,{date:selectedDate,montados:toMount,recibidos:toReceive,aprobado:false,personal:{...personal},note}]);
+      const newId = inserted?.[0]?.id;
+      setLogs(prev=>[...prev,{id:newId,date:selectedDate,montados:toMount,recibidos:toReceive,aprobado:false,personal:{...personal},note}]);
       setElementActions({});
       setNote("");
+      setToast(`Registro guardado: ${toReceive.length} recibidos, ${toMount.length} montados.`);
     } catch(e){ setError("Error: "+e.message); }
     setSaving(false);
   }
@@ -1328,6 +1347,7 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
       })});
       setLogs(prev=>prev.map(l=>l.id===editingDay.id?{...l,personal:{...editingDay.personal},note:editingDay.note,montados:[...editingDay.montados],recibidos:[...editingDay.recibidos]}:l));
       setEditingDay(null);
+      setToast("Registro actualizado correctamente.");
     } catch(e){ setError("Error al guardar edición: "+e.message); }
     setEditSaving(false);
   }
@@ -1427,6 +1447,16 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
     });
   },[programa,weeklyStats]);
 
+  const metaSemanaActual = useMemo(()=>{
+    const weekNow = getWeekNumber(TODAY);
+    const progRow = programa.find(p=>p.semana===weekNow);
+    if(!progRow) return null;
+    const realRow = weeklyStats.find(w=>w.week===weekNow);
+    const real = realRow?.areaTotal||0;
+    const pct = progRow.meta>0 ? (real/progRow.meta)*100 : 0;
+    return { week:weekNow, meta:progRow.meta, real, pct, alcanzada:pct>=100 };
+  },[programa,weeklyStats]);
+
   const lotes  = useMemo(()=>["TODOS",...new Set(elements.map(e=>e.lote).filter(Boolean).sort())]  ,[elements]);
   const torres = useMemo(()=>["TODAS",...new Set(elements.map(e=>e.torre).filter(Boolean).sort())] ,[elements]);
   const pisos  = useMemo(()=>["TODOS",...new Set(elements.map(e=>e.piso).filter(Boolean).sort())]  ,[elements]);
@@ -1484,6 +1514,7 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
 
   return (
     <div style={{ minHeight:"100vh", background:"#e2e8f0" }}>
+      {toast && <Toast msg={toast} onClose={()=>setToast(null)}/>}
       {/* Header */}
       <div style={{ background:"#f8fafc", borderBottom:"1px solid #cbd5e1", padding:"14px 28px", display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:12 }}>
         <div style={{ display:"flex", alignItems:"center", gap:16 }}>
@@ -1511,9 +1542,20 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
         <div style={{ background:"#dcfce7" }}><div style={{ height:5,width:pctMD+"%",background:"#16a34a",transition:"width 0.6s" }}/></div>
         <div style={{ background:"#dbeafe" }}><div style={{ height:5,width:pctP+"%",background:"#3b82f6",transition:"width 0.6s" }}/></div>
       </div>
+      {/* Meta semanal badge */}
+      {metaSemanaActual && (
+        <div style={{ background:metaSemanaActual.alcanzada?"#dcfce7":"#fef9c3", borderBottom:"1px solid "+(metaSemanaActual.alcanzada?"#86efac":"#fde047"), padding:"8px 28px", display:"flex", alignItems:"center", gap:10, fontSize:11 }}>
+          <span style={{ fontSize:15 }}>{metaSemanaActual.alcanzada?"🎉":"📊"}</span>
+          <span style={{ color:metaSemanaActual.alcanzada?"#15803d":"#92400e" }}>
+            {metaSemanaActual.alcanzada
+              ? `¡Meta de la semana ${metaSemanaActual.week} alcanzada! ${fmt2(metaSemanaActual.real)} / ${fmt2(metaSemanaActual.meta)} m² (${fmtPct(metaSemanaActual.pct)})`
+              : `Meta semana ${metaSemanaActual.week}: ${fmt2(metaSemanaActual.real)} / ${fmt2(metaSemanaActual.meta)} m² (${fmtPct(metaSemanaActual.pct)} cumplido)`}
+          </span>
+        </div>
+      )}
       {/* Tabs */}
       <div style={{ display:"flex", background:"#f8fafc", borderBottom:"1px solid #cbd5e1", padding:"0 28px" }}>
-        {[["registro","▷ REGISTRO"],["elementos","◈ ELEMENTOS"],["historial","◫ HISTORIAL"],["semanal","◷ SEMANAL"],["curvaS","↗ GRÁFICOS"]].map(([k,l])=>(
+        {[["registro","▷ REGISTRO"],["elementos","◈ ELEMENTOS"],["historial","◫ HISTORIAL"],["incidencias","⚠ INCIDENCIAS"],["semanal","◷ SEMANAL"],["curvaS","↗ GRÁFICOS"]].map(([k,l])=>(
           <button key={k} onClick={()=>setActiveTab(k)} style={{ background:"none",border:"none",cursor:"pointer",padding:"12px 16px",color:activeTab===k?"#d97706":"#64748b",borderBottom:activeTab===k?"2px solid #d97706":"2px solid transparent",fontFamily:"'DM Mono',monospace",fontSize:11 }}>{l}</button>
         ))}
       </div>
@@ -1575,6 +1617,25 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
                   </div>
                 </Panel>
               ))}
+
+              {/* Últimos registros — acceso rápido */}
+              {!isClosed && (() => {
+                const ultimos = [...dailyStats].filter(d=>d.date!==selectedDate).sort((a,b)=>b.date.localeCompare(a.date)).slice(0,3);
+                if(ultimos.length===0) return null;
+                return (
+                  <Panel title="ÚLTIMOS REGISTROS">
+                    {ultimos.map(d=>(
+                      <div key={d.date} style={{ display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 0",borderBottom:"1px solid #f1f5f9",fontSize:11 }}>
+                        <div>
+                          <div style={{ color:"#1e293b" }}>{d.date}</div>
+                          <div style={{ color:"#94a3b8",fontSize:9 }}>{fmt2(d.areaTotal)} m² montados · {d.personal.lideres} líd · {d.personal.montajistas} mont</div>
+                        </div>
+                        <button onClick={()=>setPersonal({...d.personal})} title="Usar este mismo personal hoy" style={{ ...btnSecondary,padding:"4px 8px",fontSize:9 }}>↻ Repetir equipo</button>
+                      </div>
+                    ))}
+                  </Panel>
+                );
+              })()}
             </div>
 
             {/* Tabla con doble checkbox */}
@@ -1822,6 +1883,32 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
           </div>
         )}
 
+        {/* ── INCIDENCIAS ── */}
+        {activeTab==="incidencias" && (
+          <div style={{ padding:"20px 28px" }}>
+            <Panel title="HISTÓRICO DE INCIDENCIAS">
+              <input placeholder="Buscar en observaciones e incidencias…" value={incidenciasSearch} onChange={e=>setIncidenciasSearch(e.target.value)} style={{ ...inp,marginBottom:16 }}/>
+              {(() => {
+                const withNotes = dailyStats.filter(d=>d.note&&d.note.trim()).sort((a,b)=>b.date.localeCompare(a.date));
+                const filtered = incidenciasSearch.trim()
+                  ? withNotes.filter(d=>d.note.toLowerCase().includes(incidenciasSearch.toLowerCase())||d.date.includes(incidenciasSearch))
+                  : withNotes;
+                if(withNotes.length===0) return <div style={{ color:"#94a3b8",fontSize:12 }}>Sin incidencias registradas aún.</div>;
+                if(filtered.length===0) return <div style={{ color:"#94a3b8",fontSize:12 }}>Sin resultados para "{incidenciasSearch}".</div>;
+                return filtered.map(d=>(
+                  <div key={d.date} style={{ padding:"10px 0",borderBottom:"1px solid #f1f5f9" }}>
+                    <div style={{ display:"flex",justifyContent:"space-between",marginBottom:4 }}>
+                      <span style={{ color:"#d97706",fontSize:11,fontWeight:"bold" }}>{d.date}</span>
+                      <span style={{ color:"#94a3b8",fontSize:9 }}>Sem. {getWeekNumber(d.date)} · {d.aprobado?"✓ Aprobado":"⏳ Pendiente"}</span>
+                    </div>
+                    <div style={{ fontSize:12,color:"#1e293b" }}>{d.note}</div>
+                  </div>
+                ));
+              })()}
+            </Panel>
+          </div>
+        )}
+
         {/* ── SEMANAL ── */}
         {activeTab==="semanal" && (
           <div>
@@ -1864,6 +1951,9 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
               <BarrasSemanales dailyStats={dailyStats} elements={elements}/>
             </Panel>
             <Panel title="PLANO DE AVANCE — TORRES Y PISOS">
+              <div style={{ display:"flex",justifyContent:"flex-end",marginBottom:8 }}>
+                <button onClick={()=>descargarPlanoComoImagen(elements,montadosPos,obra.nombre)} style={{ ...btnSecondary,fontSize:10,padding:"5px 10px" }}>⬇ Descargar como imagen</button>
+              </div>
               <PlanoAvance elements={elements} montadosPos={montadosPos}/>
             </Panel>
             <Panel title="CURVA S — AVANCE PROGRAMADO vs REAL (registros aprobados)">
@@ -2015,6 +2105,100 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
 
 
 // ── Plano de Avance ───────────────────────────────────────────────────────────
+// Genera el plano de avance como imagen PNG descargable, dibujado en un canvas oculto
+// usando la misma lógica de estado de celda (completo/parcial/pendiente) que el componente visual.
+function descargarPlanoComoImagen(elements, montadosPos, obraNombre) {
+  const torres = [...new Set(elements.map(e=>e.torre).filter(Boolean))].sort();
+  const pisos  = [...new Set(elements.map(e=>e.piso).filter(Boolean))].sort((a,b)=>Number(b)-Number(a));
+  const TIPOS = ['MD','P'];
+  if(torres.length===0) return;
+
+  function getCellStatus(torre, piso, tipo) {
+    const elems = elements.filter(e=>e.torre===torre&&String(e.piso)===String(piso)&&e.tipo===tipo);
+    if(elems.length===0) return 'empty';
+    const mounted = elems.filter(e=>elMatchesKeys(e,montadosPos));
+    const pct = mounted.length/elems.length;
+    if(pct===0) return 'pendiente';
+    if(pct===1) return 'completo';
+    return 'parcial';
+  }
+
+  const dpr = 2;
+  const cellW = 56, cellH = 34, labelW = 50, headerH = 60, footerH = 50, pad = 24;
+  const W = labelW + torres.length*TIPOS.length*cellW + pad*2;
+  const H = headerH + pisos.length*cellH + footerH + pad*2;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = W*dpr; canvas.height = H*dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr,dpr);
+
+  ctx.fillStyle = '#ffffff'; ctx.fillRect(0,0,W,H);
+
+  // Title
+  ctx.fillStyle = '#d97706'; ctx.font = 'bold 16px monospace'; ctx.textAlign = 'left';
+  ctx.fillText(`PLANO DE AVANCE — ${obraNombre||''}`, pad, pad+8);
+  ctx.fillStyle = '#94a3b8'; ctx.font = '10px monospace';
+  ctx.fillText(new Date().toLocaleDateString('es-CL'), pad, pad+26);
+
+  const top = pad + headerH;
+  // Torre headers
+  ctx.textAlign = 'center';
+  torres.forEach((t,ti)=>{
+    const x = labelW + pad + ti*TIPOS.length*cellW + cellW;
+    ctx.fillStyle = '#1e293b'; ctx.font = 'bold 13px monospace';
+    ctx.fillText(t, x, top-26);
+    TIPOS.forEach((tip,tj)=>{
+      const xx = labelW + pad + ti*TIPOS.length*cellW + tj*cellW + cellW/2;
+      ctx.fillStyle = tip==='MD'?'#16a34a':'#2563eb'; ctx.font = '9px monospace';
+      ctx.fillText(tip, xx, top-10);
+    });
+  });
+
+  // Grid + cells
+  pisos.forEach((piso,pi)=>{
+    const y = top + pi*cellH;
+    ctx.fillStyle = '#64748b'; ctx.font = 'bold 11px monospace'; ctx.textAlign = 'right';
+    ctx.fillText('P'+piso, labelW+pad-8, y+cellH/2+4);
+    torres.forEach((t,ti)=>TIPOS.forEach((tipo,tj)=>{
+      const x = labelW + pad + ti*TIPOS.length*cellW + tj*cellW;
+      const status = getCellStatus(t,piso,tipo);
+      const bg = status==='completo'?'#16a34a':status==='parcial'?'#86efac':status==='empty'?'#ffffff':'#e2e8f0';
+      const fg = status==='completo'?'#ffffff':status==='parcial'?'#166534':'#94a3b8';
+      ctx.fillStyle = bg;
+      ctx.fillRect(x+3, y+3, cellW-6, cellH-6);
+      if(status!=='empty'){
+        ctx.strokeStyle = status==='completo'?'#15803d':status==='parcial'?'#4ade80':'#cbd5e1';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(x+3, y+3, cellW-6, cellH-6);
+      }
+      ctx.fillStyle = fg; ctx.font = 'bold 11px monospace'; ctx.textAlign = 'center';
+      ctx.fillText(status==='completo'?'✓':status==='parcial'?'~':'', x+cellW/2, y+cellH/2+4);
+    }));
+  });
+
+  // Legend
+  const legendY = top + pisos.length*cellH + 30;
+  ctx.textAlign = 'left'; ctx.font = '10px monospace';
+  ctx.fillStyle = '#16a34a'; ctx.fillRect(pad, legendY, 14, 12);
+  ctx.fillStyle = '#64748b'; ctx.fillText('Completo (100%)', pad+20, legendY+10);
+  ctx.fillStyle = '#86efac'; ctx.fillRect(pad+170, legendY, 14, 12);
+  ctx.fillStyle = '#64748b'; ctx.fillText('Parcial', pad+190, legendY+10);
+  ctx.fillStyle = '#e2e8f0'; ctx.fillRect(pad+280, legendY, 14, 12);
+  ctx.fillStyle = '#64748b'; ctx.fillText('Pendiente', pad+300, legendY+10);
+
+  canvas.toBlob(blob=>{
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `plano_avance_${(obraNombre||'obra').replace(/\s+/g,'_')}_${new Date().toISOString().slice(0,10)}.png`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, 'image/png');
+}
+
 function PlanoAvance({ elements, montadosPos }) {
   // Get unique torres and pisos from data, sorted
   const torres = [...new Set(elements.map(e=>e.torre).filter(Boolean))].sort();
@@ -2498,6 +2682,17 @@ function CurvaS({ data }) {
 // ── Shared Components ─────────────────────────────────────────────────────────
 function LoadingScreen() { return <div style={{ minHeight:"100vh",background:"#e2e8f0",display:"flex",alignItems:"center",justifyContent:"center" }}><div style={{ color:"#d97706",fontFamily:"'DM Mono',monospace",fontSize:14,letterSpacing:3 }}>CARGANDO…</div></div>; }
 function ErrorBar({msg,onClose}) { return <div style={{ background:"#fee2e2",color:"#dc2626",padding:"10px 28px",fontSize:11,borderBottom:"1px solid #fecaca" }}>⚠ {msg} <button onClick={onClose} style={{ marginLeft:12,background:"none",border:"none",color:"#dc2626",cursor:"pointer" }}>×</button></div>; }
+
+function Toast({ msg, onClose }) {
+  useEffect(()=>{ const t=setTimeout(onClose,3500); return ()=>clearTimeout(t); },[msg]);
+  return (
+    <div style={{ position:"fixed",bottom:24,right:24,background:"#16a34a",color:"#fff",padding:"14px 20px",borderRadius:8,fontSize:12,fontFamily:"'DM Mono',monospace",boxShadow:"0 4px 16px rgba(0,0,0,0.25)",zIndex:2000,display:"flex",alignItems:"center",gap:10,maxWidth:340 }}>
+      <span style={{ fontSize:16 }}>✓</span>
+      <span>{msg}</span>
+      <button onClick={onClose} style={{ marginLeft:"auto",background:"none",border:"none",color:"#fff",cursor:"pointer",opacity:0.7,fontSize:14 }}>×</button>
+    </div>
+  );
+}
 function Panel({title,children}) { return <div style={{ background:"#f8fafc",border:"1px solid #cbd5e1",borderRadius:10,padding:18,marginBottom:16 }}><div style={{ fontSize:9,letterSpacing:3,color:"#94a3b8",marginBottom:12,borderBottom:"1px solid #e2e8f0",paddingBottom:8 }}>{title}</div>{children}</div>; }
 function KPIBox({label,value,sub,color,large}) { return <div style={{ textAlign:"right",minWidth:130,background:"#f8fafc",border:"1px solid #cbd5e1",borderRadius:8,padding:"8px 12px" }}><div style={{ fontSize:8,color:"#94a3b8",letterSpacing:1,marginBottom:2 }}>{label}</div><div style={{ fontSize:large?20:15,fontFamily:"'Archivo Black',sans-serif",color }}>{value}</div><div style={{ fontSize:9,color:"#94a3b8" }}>{sub}</div></div>; }
 function StatCard({label,value,sub,color}) { return <div style={{ background:"#f8fafc",border:"1px solid #cbd5e1",borderRadius:8,padding:"12px 16px",textAlign:"center" }}><div style={{ fontSize:9,color:"#94a3b8",letterSpacing:2,marginBottom:4 }}>{label}</div><div style={{ fontSize:22,fontFamily:"'Archivo Black',sans-serif",color }}>{value}</div><div style={{ fontSize:10,color:"#64748b",marginTop:2 }}>{sub}</div></div>; }
