@@ -474,6 +474,95 @@ function generateFullExcel(elements, dailyStats, weeklyStats, obraName) {
   XLSX.writeFile(wb,`reporte_completo_${obraName.replace(/\s+/g,"_")}.xlsx`);
 }
 
+// ── Informe Ejecutivo (consolidado, todas las obras) ────────────────────────────
+// Genera un PDF de alto nivel para gerencia: resumen general (cumplimientos,
+// rendimientos promedio) + una Curva S por cada obra activa.
+function generateInformeEjecutivo(adminStats, weekColumns) {
+  const fecha = new Date().toLocaleDateString('es-CL');
+  const currentWeek = getWeekNumber(TODAY);
+
+  const totalArea = adminStats.reduce((s,a)=>s+a.totalArea,0);
+  const totalMounted = adminStats.reduce((s,a)=>s+a.mountedArea,0);
+  const totalReceived = adminStats.reduce((s,a)=>s+a.receivedArea,0);
+  const pctAvanceGlobal = totalArea>0 ? (totalMounted/totalArea)*100 : 0;
+  const cumplimientosValidos = adminStats.filter(a=>a.cumplimientoPct!==null);
+  const cumplimientoPromedio = cumplimientosValidos.length>0
+    ? cumplimientosValidos.reduce((s,a)=>s+a.cumplimientoPct,0)/cumplimientosValidos.length : null;
+  const rendPromedioGlobal = adminStats.length>0
+    ? adminStats.reduce((s,a)=>s+a.rendPromedioSemanal,0)/adminStats.length : 0;
+
+  const obrasOrdenadas = [...adminStats].sort((a,b)=>(a.cumplimientoPct??999)-(b.cumplimientoPct??999));
+
+  const html = `<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"/>
+<style>*{margin:0;padding:0;box-sizing:border-box;}body{font-family:'Courier New',monospace;background:#e2e8f0;color:#1e293b;padding:20px;}.header{background:#fff;border:1px solid #cbd5e1;border-radius:8px;padding:18px 22px;display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;}.title{color:#d97706;font-size:20px;font-weight:bold;}.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px;}.kpi{background:#fff;border:1px solid #cbd5e1;border-radius:6px;padding:14px;text-align:center;}.kpi-label{color:#94a3b8;font-size:9px;letter-spacing:1px;margin-bottom:6px;}.kpi-value{font-size:20px;font-weight:bold;}.section{background:#fff;border:1px solid #cbd5e1;border-radius:6px;margin-bottom:14px;page-break-inside:avoid;}.section-title{color:#d97706;font-size:10px;letter-spacing:3px;padding:12px 16px;border-bottom:1px solid #cbd5e1;}table{width:100%;border-collapse:collapse;border-spacing:0;}th{background:#f1f5f9;color:#64748b;font-size:9px;letter-spacing:1px;padding:7px 10px;text-align:left;}td{padding:7px 10px;font-size:10px;color:#475569;border-bottom:1px solid #f1f5f9;}tr{page-break-inside:avoid;}thead{display:table-header-group;}.amber{color:#d97706;}.green{color:#16a34a;}.blue{color:#2563eb;}.red{color:#dc2626;}.footer{text-align:center;color:#94a3b8;font-size:8px;margin-top:16px;border-top:1px solid #cbd5e1;padding-top:8px;}@media print{body{background:#fff!important;}}</style>
+</head><body>
+<div class="header"><div><div class="title">◈ INFORME EJECUTIVO SEMANAL</div><div style="color:#94a3b8;font-size:11px;letter-spacing:2px;margin-top:4px">BAUMAX SPA · TODAS LAS OBRAS · SEMANA ${currentWeek}</div></div><div style="text-align:right"><div style="color:#94a3b8;font-size:9px">FECHA</div><div style="font-size:13px;font-weight:bold">${fecha}</div></div></div>
+
+<div class="kpis">
+  <div class="kpi"><div class="kpi-label">m² TOTAL CONTRATADO</div><div class="kpi-value amber">${fmt2(totalArea)}</div></div>
+  <div class="kpi"><div class="kpi-label">m² MONTADOS A LA FECHA</div><div class="kpi-value green">${fmt2(totalMounted)}</div></div>
+  <div class="kpi"><div class="kpi-label">AVANCE GLOBAL</div><div class="kpi-value amber">${fmtPct(pctAvanceGlobal)}</div></div>
+  <div class="kpi"><div class="kpi-label">CUMPLIM. PROGRAMA PROM.</div><div class="kpi-value ${cumplimientoPromedio===null?'':cumplimientoPromedio>=100?'green':cumplimientoPromedio>=85?'amber':'red'}">${cumplimientoPromedio===null?'—':fmtPct(cumplimientoPromedio)}</div></div>
+</div>
+
+<div class="section"><div class="section-title">RESUMEN POR OBRA</div>
+<table>
+<tr><th>OBRA</th><th>m² TOTAL</th><th>m² MONTADOS</th><th>% AVANCE</th><th>REND. PROM. SEM. (m²)</th><th>CUMPLIM. PROGRAMA</th></tr>
+${obrasOrdenadas.map(a=>`<tr>
+  <td style="font-weight:bold;color:#1e293b">${a.obra.nombre}</td>
+  <td>${fmt2(a.totalArea)}</td>
+  <td class="green">${fmt2(a.mountedArea)}</td>
+  <td>${fmtPct(a.pctMounted)}</td>
+  <td class="amber">${fmt2(a.rendPromedioSemanal)}</td>
+  <td class="${a.cumplimientoPct===null?'':a.cumplimientoPct>=100?'green':a.cumplimientoPct>=85?'amber':'red'}" style="font-weight:bold">${a.cumplimientoPct===null?'Sin programa':fmtPct(a.cumplimientoPct)}</td>
+</tr>`).join('')}
+<tr style="background:#f8fafc;font-weight:bold">
+  <td class="amber">TOTAL / PROMEDIO</td>
+  <td class="amber">${fmt2(totalArea)}</td>
+  <td class="green">${fmt2(totalMounted)}</td>
+  <td>${fmtPct(pctAvanceGlobal)}</td>
+  <td class="amber">${fmt2(rendPromedioGlobal)}</td>
+  <td>${cumplimientoPromedio===null?'—':fmtPct(cumplimientoPromedio)}</td>
+</tr>
+</table>
+</div>
+
+${adminStats.map((a,i)=>`<div class="section" style="page-break-before:always"><div class="section-title">CURVA S — ${a.obra.nombre}</div>
+<div style="padding:14px">
+  ${a.curvaSData.length>0
+    ? `<canvas id="curvaExecCanvas${i}" width="820" height="340" style="width:100%;border-radius:4px"></canvas>`
+    : `<div style="color:#94a3b8;font-size:11px;text-align:center;padding:30px">Sin programa cargado para esta obra.</div>`}
+</div>
+</div>`).join('')}
+
+<div class="footer">Informe ejecutivo generado automáticamente · Control de Montaje · Baumax SPA · Semana ${currentWeek} · ${fecha}</div>
+</body></html>`;
+
+  const iframe = document.createElement('iframe');
+  iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:900px;height:600px;border:0;opacity:0;';
+  document.body.appendChild(iframe);
+  const doc = iframe.contentWindow.document;
+  doc.open(); doc.write(html); doc.close();
+
+  setTimeout(()=>{
+    adminStats.forEach((a,i)=>{
+      if(a.curvaSData.length===0) return;
+      const canvas = doc.getElementById(`curvaExecCanvas${i}`);
+      if(!canvas) return;
+      const dpr = 2;
+      canvas.width = 820*dpr; canvas.height = 340*dpr;
+      canvas.style.width = '820px'; canvas.style.height = '340px';
+      const ctx = canvas.getContext('2d');
+      ctx.scale(dpr,dpr);
+      drawCurvaSOnCanvas(ctx, a.curvaSData, 820, 340);
+    });
+
+    iframe.contentWindow.focus();
+    iframe.contentWindow.print();
+    setTimeout(()=>document.body.removeChild(iframe),1200);
+  },500);
+}
+
 // ── Main App ──────────────────────────────────────────────────────────────────
 export default function App() {
   const [screen, setScreen] = useState("login");
@@ -757,7 +846,22 @@ function AdminPanel({ obras, onBack, onObraCreated, setError, onViewObra }) {
         const realAcum = mountedArea; // total montado a la fecha (todo lo aprobado hasta ahora)
         const cumplimientoPct = programadoAcum>0 ? (realAcum/programadoAcum)*100 : null;
 
-        return { obra:o, totalArea, mountedArea, receivedArea, pctMounted:totalArea>0?(mountedArea/totalArea)*100:0, pctReceived:totalArea>0?(receivedArea/totalArea)*100:0, weekMap, weekMapRecibidos, programadoAcum, cumplimientoPct };
+        // Curva S data por obra (mismo formato que usa el componente CurvaS): {semana, acum, real}
+        let acumProg = 0;
+        const curvaSData = progData.map(p=>{
+          acumProg += (p.meta||0);
+          const realAcumSemana = Object.entries(weekMap).filter(([w])=>w<=p.semana).reduce((s,[,v])=>s+v,0);
+          const hasRealData = Object.keys(weekMap).some(w=>w<=p.semana);
+          return { semana:p.semana, acum:acumProg, real: hasRealData ? realAcumSemana : null };
+        });
+
+        // Rendimiento promedio: m² montados / día efectivo, promedio de las últimas semanas con datos
+        const semanasConDatos = Object.keys(weekMap).filter(w=>weekMap[w]>0);
+        const rendPromedioSemanal = semanasConDatos.length>0
+          ? semanasConDatos.reduce((s,w)=>s+weekMap[w],0)/semanasConDatos.length
+          : 0;
+
+        return { obra:o, totalArea, mountedArea, receivedArea, pctMounted:totalArea>0?(mountedArea/totalArea)*100:0, pctReceived:totalArea>0?(receivedArea/totalArea)*100:0, weekMap, weekMapRecibidos, programadoAcum, cumplimientoPct, curvaSData, rendPromedioSemanal };
       }));
 
       // Get all weeks
@@ -867,7 +971,8 @@ function AdminPanel({ obras, onBack, onObraCreated, setError, onViewObra }) {
       <div style={{ background:"#f8fafc", borderBottom:"1px solid #cbd5e1", padding:"14px 28px", display:"flex", alignItems:"center", gap:16 }}>
         <button onClick={onBack} style={btnSecondary}>← Volver</button>
         <div style={{ fontFamily:"'Archivo Black',sans-serif", fontSize:18, color:"#d97706" }}>⚙ PANEL ADMINISTRADOR</div>
-        <div style={{ marginLeft:"auto" }}>
+        <div style={{ marginLeft:"auto", display:"flex", gap:8 }}>
+          <button onClick={()=>generateInformeEjecutivo(adminStats,weekColumns)} disabled={adminStats.length===0} style={{ background:adminStats.length>0?"#d97706":"#e2e8f0",color:adminStats.length>0?"#fff":"#94a3b8",border:"none",borderRadius:6,padding:"8px 16px",cursor:adminStats.length>0?"pointer":"default",fontFamily:"'DM Mono',monospace",fontSize:11 }}>📊 Informe Ejecutivo</button>
           <button onClick={descargarBackup} style={{ background:"#f1f5f9",color:"#475569",border:"1px solid #cbd5e1",borderRadius:6,padding:"8px 16px",cursor:"pointer",fontFamily:"'DM Mono',monospace",fontSize:11 }}>⬇ Backup Completo</button>
         </div>
       </div>
@@ -1961,7 +2066,7 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
                 <div style={{ color:"#94a3b8",fontSize:12,textAlign:"center",padding:40 }}>
                   No hay programa cargado.<br/><span style={{ fontSize:10 }}>El admin puede ingresarlo desde Panel Admin → Programa Semanal.</span>
                 </div>
-              ):<CurvaS data={programaAcum}/>}
+              ):<CurvaS data={programaAcum} obraNombre={obra.nombre}/>}
             </Panel>
             <div style={{ background:"#f8fafc",border:"1px solid #cbd5e1",borderRadius:10,padding:18,marginBottom:16 }}>
               <div style={{ fontSize:9,letterSpacing:3,color:"#94a3b8",marginBottom:14,borderBottom:"1px solid #e2e8f0",paddingBottom:8 }}>EXPORTAR INFORMES</div>
@@ -2378,50 +2483,9 @@ function ConsolidadoSemanal({ adminStats, weekColumns }) {
 }
 
 // ── Barras Semanales ──────────────────────────────────────────────────────────
-function BarrasSemanales({ dailyStats, elements }) {
-  const canvasRef = useRef();
-
-  // Get current week days (Mon-Sun)
-  const weekDays = useMemo(() => {
-    const today = new Date();
-    const day = today.getDay(); // 0=Sun
-    const monday = new Date(today);
-    monday.setDate(today.getDate() - (day===0?6:day-1));
-    const days = [];
-    for(let i=0;i<7;i++){
-      const d = new Date(monday);
-      d.setDate(monday.getDate()+i);
-      days.push(d.toISOString().slice(0,10));
-    }
-    return days;
-  }, []);
-
-  const dayLabels = ["Lun","Mar","Mié","Jue","Vie","Sáb","Dom"];
-
-  const data = useMemo(() => {
-    return weekDays.map((date, i) => {
-      const dayLogs = dailyStats.find(d=>d.date===date);
-      return {
-        date,
-        label: dayLabels[i],
-        montados: dayLogs ? dayLogs.areaTotal : 0,
-        recibidos: dayLogs ? dayLogs.areaRecibida : 0,
-        isToday: date === new Date().toISOString().slice(0,10),
-        hasDat: !!dayLogs,
-      };
-    });
-  }, [weekDays, dailyStats]);
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const dpr = window.devicePixelRatio || 1;
-    const rect = canvas.getBoundingClientRect();
-    canvas.width = rect.width * dpr;
-    canvas.height = rect.height * dpr;
-    const ctx = canvas.getContext('2d');
-    ctx.scale(dpr, dpr);
-    const W=rect.width, H=rect.height;
+// Dibuja el gráfico de barras despachado/montado por día (semana actual) en un canvas dado.
+// Extraído como función standalone para reutilizar en el componente visual y en exportación de imagen.
+function drawBarrasSemanalesOnCanvas(ctx, data, W, H) {
     const padL=55, padR=20, padT=30, padB=45;
     const cW=W-padL-padR, cH=H-padT-padB;
     const maxVal = Math.max(...data.flatMap(d=>[d.montados,d.recibidos]), 100);
@@ -2493,7 +2557,93 @@ function BarrasSemanales({ dailyStats, elements }) {
     ctx.save(); ctx.translate(12,padT+cH/2); ctx.rotate(-Math.PI/2);
     ctx.fillStyle='#94a3b8'; ctx.font='10px monospace'; ctx.textAlign='center';
     ctx.fillText('m²', 0, 0); ctx.restore();
+}
 
+// Genera y descarga una imagen PNG del gráfico de barras despachado/montado (semana actual).
+function descargarBarrasSemanalesComoImagen(data, obraNombre) {
+  const dpr = 2, W = 780, H = 260;
+  const canvas = document.createElement('canvas');
+  canvas.width = W*dpr; canvas.height = H*dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr,dpr);
+  drawBarrasSemanalesOnCanvas(ctx, data, W, H);
+  canvas.toBlob(blob=>{
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `rendimiento_semanal_${(obraNombre||'obra').replace(/\s+/g,'_')}_${new Date().toISOString().slice(0,10)}.png`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, 'image/png');
+}
+
+// Genera y descarga una imagen PNG de la Curva S de una obra.
+function descargarCurvaSComoImagen(data, obraNombre) {
+  if(!data || data.length===0) return;
+  const dpr = 2, W = 900, H = 380;
+  const canvas = document.createElement('canvas');
+  canvas.width = W*dpr; canvas.height = H*dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr,dpr);
+  drawCurvaSOnCanvas(ctx, data, W, H);
+  canvas.toBlob(blob=>{
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `curva_s_${(obraNombre||'obra').replace(/\s+/g,'_')}_${new Date().toISOString().slice(0,10)}.png`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, 'image/png');
+}
+
+function BarrasSemanales({ dailyStats, elements }) {
+  const canvasRef = useRef();
+
+  // Get current week days (Mon-Sun)
+  const weekDays = useMemo(() => {
+    const today = new Date();
+    const day = today.getDay(); // 0=Sun
+    const monday = new Date(today);
+    monday.setDate(today.getDate() - (day===0?6:day-1));
+    const days = [];
+    for(let i=0;i<7;i++){
+      const d = new Date(monday);
+      d.setDate(monday.getDate()+i);
+      days.push(d.toISOString().slice(0,10));
+    }
+    return days;
+  }, []);
+
+  const dayLabels = ["Lun","Mar","Mié","Jue","Vie","Sáb","Dom"];
+
+  const data = useMemo(() => {
+    return weekDays.map((date, i) => {
+      const dayLogs = dailyStats.find(d=>d.date===date);
+      return {
+        date,
+        label: dayLabels[i],
+        montados: dayLogs ? dayLogs.areaTotal : 0,
+        recibidos: dayLogs ? dayLogs.areaRecibida : 0,
+        isToday: date === new Date().toISOString().slice(0,10),
+        hasDat: !!dayLogs,
+      };
+    });
+  }, [weekDays, dailyStats]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    const ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    drawBarrasSemanalesOnCanvas(ctx, data, rect.width, rect.height);
   }, [data]);
 
   const totRec = data.reduce((s,d)=>s+d.recibidos,0);
@@ -2501,7 +2651,7 @@ function BarrasSemanales({ dailyStats, elements }) {
 
   return (
     <div>
-      <div style={{ display:"flex",gap:12,marginBottom:12,flexWrap:"wrap" }}>
+      <div style={{ display:"flex",gap:12,marginBottom:12,flexWrap:"wrap",alignItems:"center" }}>
         <div style={{ background:"#dbeafe",border:"1px solid #2563eb33",borderRadius:8,padding:"10px 20px",textAlign:"center" }}>
           <div style={{ fontSize:9,color:"#2563eb",letterSpacing:2 }}>DESPACHADOS SEMANA</div>
           <div style={{ fontSize:20,fontFamily:"'Archivo Black',sans-serif",color:"#2563eb" }}>{Math.round(totRec)} m²</div>
@@ -2510,6 +2660,7 @@ function BarrasSemanales({ dailyStats, elements }) {
           <div style={{ fontSize:9,color:"#16a34a",letterSpacing:2 }}>MONTADOS SEMANA</div>
           <div style={{ fontSize:20,fontFamily:"'Archivo Black',sans-serif",color:"#16a34a" }}>{Math.round(totMon)} m²</div>
         </div>
+        <button onClick={()=>descargarBarrasSemanalesComoImagen(data)} style={{ ...btnSecondary,fontSize:10,padding:"6px 12px",marginLeft:"auto" }}>⬇ Descargar como imagen</button>
       </div>
       <canvas ref={canvasRef} style={{ width:"100%",maxWidth:780,height:260,display:"block" }}/>
     </div>
@@ -2517,16 +2668,10 @@ function BarrasSemanales({ dailyStats, elements }) {
 }
 
 // ── Curva S (dual axis) ─────────────────────────────────────────────────────
-function CurvaS({ data }) {
-  const canvasRef = useRef();
-  useEffect(()=>{
-    const canvas=canvasRef.current; if(!canvas) return;
-    const dpr=window.devicePixelRatio||1;
-    const rect=canvas.getBoundingClientRect();
-    canvas.width=rect.width*dpr; canvas.height=rect.height*dpr;
-    const ctx=canvas.getContext('2d');
-    ctx.scale(dpr,dpr);
-    const W=rect.width, H=rect.height;
+// Dibuja la Curva S (barras semanales + líneas acumuladas) en un contexto de canvas dado.
+// Extraído como función standalone para reutilizar tanto en el componente visual CurvaS
+// como en la generación de canvas ocultos para PDFs (informe ejecutivo, etc).
+function drawCurvaSOnCanvas(ctx, data, W, H) {
     const padL=90, padR=70, padT=36, padB=52;
     const cW=W-padL-padR, cH=H-padT-padB;
     const n=data.length; if(n===0) return;
@@ -2675,8 +2820,27 @@ function CurvaS({ data }) {
     ctx.fillStyle='#475569'; ctx.font='10px monospace'; ctx.fillText('m² semanal',0,0); ctx.restore();
     ctx.save(); ctx.translate(W-10,padT+cH/2); ctx.rotate(Math.PI/2);
     ctx.fillStyle='#2563eb'; ctx.font='10px monospace'; ctx.fillText('m² acumulado',0,0); ctx.restore();
+}
+
+function CurvaS({ data, obraNombre }) {
+  const canvasRef = useRef();
+  useEffect(()=>{
+    const canvas=canvasRef.current; if(!canvas) return;
+    const dpr=window.devicePixelRatio||1;
+    const rect=canvas.getBoundingClientRect();
+    canvas.width=rect.width*dpr; canvas.height=rect.height*dpr;
+    const ctx=canvas.getContext('2d');
+    ctx.scale(dpr,dpr);
+    drawCurvaSOnCanvas(ctx, data, rect.width, rect.height);
   },[data]);
-  return <canvas id="curvaSMain" ref={canvasRef} style={{ width:"100%",maxWidth:820,height:360,display:"block",margin:"0 auto" }}/>;
+  return (
+    <div>
+      <div style={{ display:"flex",justifyContent:"flex-end",marginBottom:8 }}>
+        <button onClick={()=>descargarCurvaSComoImagen(data,obraNombre)} style={{ ...btnSecondary,fontSize:10,padding:"5px 10px" }}>⬇ Descargar como imagen</button>
+      </div>
+      <canvas id="curvaSMain" ref={canvasRef} style={{ width:"100%",maxWidth:820,height:360,display:"block",margin:"0 auto" }}/>
+    </div>
+  );
 }
 
 // ── Shared Components ─────────────────────────────────────────────────────────
