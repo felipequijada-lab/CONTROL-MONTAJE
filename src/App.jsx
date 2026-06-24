@@ -906,7 +906,7 @@ function AdminPanel({ obras, onBack, onObraCreated, setError, onViewObra }) {
     if(!newObra.nombre) return;
     setCreando(true);
     try {
-      await sbFetch("obras",{method:"POST",body:JSON.stringify({nombre:newObra.nombre,ubicacion:newObra.ubicacion,fecha_inicio:newObra.fecha_inicio,estado:"activa"})});
+      await sbFetch("obras",{method:"POST",body:JSON.stringify({nombre:newObra.nombre,ubicacion:newObra.ubicacion,fecha_inicio:newObra.fecha_inicio,estado:"activa",listado_estado:"preliminar"})});
       setNewObra({nombre:"",ubicacion:"",fecha_inicio:TODAY});
       onObraCreated();
     } catch(e){ setError("Error: "+e.message); }
@@ -917,6 +917,14 @@ function AdminPanel({ obras, onBack, onObraCreated, setError, onViewObra }) {
     if(!window.confirm(`¿Cerrar la obra "${obra.nombre}"? Ya no se podrán hacer modificaciones.`)) return;
     try {
       await sbFetch(`obras?id=eq.${obra.id}`,{method:"PATCH",body:JSON.stringify({estado:"cerrada"})});
+      onObraCreated();
+    } catch(e){ setError("Error: "+e.message); }
+  }
+
+  async function toggleListadoEstado(obra) {
+    const nuevo = obra.listado_estado==="definitivo" ? "preliminar" : "definitivo";
+    try {
+      await sbFetch(`obras?id=eq.${obra.id}`,{method:"PATCH",body:JSON.stringify({listado_estado:nuevo})});
       onObraCreated();
     } catch(e){ setError("Error: "+e.message); }
   }
@@ -997,7 +1005,10 @@ function AdminPanel({ obras, onBack, onObraCreated, setError, onViewObra }) {
                     <tbody>
                       {[...adminStats].sort((a,b)=>(a.cumplimientoPct??999)-(b.cumplimientoPct??999)).map(s=>(
                         <tr key={s.obra.id} style={{ borderBottom:"1px solid #f1f5f9",background:"#fff" }}>
-                          <Td accent="#1e293b">{s.obra.nombre}</Td>
+                          <Td accent="#1e293b">
+                            {s.obra.nombre}
+                            {s.obra.listado_estado!=="definitivo" && <span title="Listado de elementos preliminar" style={{ marginLeft:6,fontSize:9,color:"#d97706" }}>⚠ prelim.</span>}
+                          </Td>
                           <Td>{fmt2(s.totalArea)}</Td>
                           <Td accent="#2563eb">{fmt2(s.receivedArea)}</Td>
                           <Td><ProgressCell pct={s.pctReceived} color="#2563eb"/></Td>
@@ -1091,10 +1102,18 @@ function AdminPanel({ obras, onBack, onObraCreated, setError, onViewObra }) {
               {obrasActivas.map(o=>(
                 <div key={o.id} style={{ padding:"12px 0",borderBottom:"1px solid #f1f5f9",display:"flex",justifyContent:"space-between",alignItems:"center" }}>
                   <div>
-                    <div style={{ color:"#1e293b",fontWeight:"bold" }}>{o.nombre}</div>
+                    <div style={{ display:"flex",alignItems:"center",gap:8 }}>
+                      <span style={{ color:"#1e293b",fontWeight:"bold" }}>{o.nombre}</span>
+                      <span style={{ fontSize:9,padding:"2px 8px",borderRadius:10,fontWeight:"bold",background:o.listado_estado==="definitivo"?"#dcfce7":"#fef9c3",color:o.listado_estado==="definitivo"?"#16a34a":"#92400e" }}>
+                        {o.listado_estado==="definitivo"?"✓ DEFINITIVO":"⚠ PRELIMINAR"}
+                      </span>
+                    </div>
                     <div style={{ color:"#94a3b8",fontSize:10 }}>{o.ubicacion} · {o.fecha_inicio}</div>
                   </div>
                   <div style={{ display:"flex",gap:8,alignItems:"center" }}>
+                    <button onClick={()=>toggleListadoEstado(o)} style={{ background:"#f1f5f9",color:"#475569",border:"1px solid #cbd5e1",borderRadius:6,padding:"6px 12px",cursor:"pointer",fontFamily:"'DM Mono',monospace",fontSize:10 }}>
+                      Marcar como {o.listado_estado==="definitivo"?"Preliminar":"Definitivo"}
+                    </button>
                     <button onClick={()=>onViewObra(o)} style={{ ...btnSecondary,padding:"6px 12px",fontSize:10 }}>Ver →</button>
                     <button onClick={()=>cerrarObra(o)} style={{ background:"#fee2e2",color:"#dc2626",border:"1px solid #fecaca",borderRadius:6,padding:"6px 12px",cursor:"pointer",fontFamily:"'DM Mono',monospace",fontSize:10 }}>✕ Cerrar Obra</button>
                   </div>
@@ -1640,6 +1659,13 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
           <KPIBox label="AVANCE TOTAL" value={fmtPct(pctAll)} sub={fmt2(stats.all.areaMounted)+"/"+fmt2(stats.all.areaTotal)+" m²"} color="#d97706" large/>
         </div>
       </div>
+      {/* Aviso de listado preliminar */}
+      {obra.listado_estado!=="definitivo" && (
+        <div style={{ background:"#fff7ed", borderBottom:"1px solid #fed7aa", padding:"7px 28px", display:"flex", alignItems:"center", gap:8, fontSize:10 }}>
+          <span>⚠</span>
+          <span style={{ color:"#9a3412" }}>Listado de elementos <b>preliminar</b> — los m² totales y porcentajes de avance pueden cambiar cuando se cargue la versión definitiva.</span>
+        </div>
+      )}
       {/* Progress bars */}
       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", height:5 }}>
         <div style={{ background:"#dbeafe" }}><div style={{ height:5,width:pctRec+"%",background:"#2563eb",transition:"width 0.6s" }}/></div>
