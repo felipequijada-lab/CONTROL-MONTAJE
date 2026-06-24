@@ -589,7 +589,7 @@ export default function App() {
   async function handleUserLogin() {
     setLoginError("");
     try {
-      const users = await sbFetch(`usuarios?mail=eq.${encodeURIComponent(loginMail)}&rut=eq.${encodeURIComponent(loginRut)}&select=*`);
+      const users = await sbFetch(`usuarios?mail=ilike.${encodeURIComponent(loginMail.trim())}&rut=eq.${encodeURIComponent(loginRut.trim())}&select=*`);
       if(users.length===0){ setLoginError("Mail o RUT incorrecto"); return; }
       const user = users[0];
       setCurrentUser({...user, role:"encargado"});
