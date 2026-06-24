@@ -699,8 +699,7 @@ function AdminPanel({ obras, onBack, onObraCreated, setError, onViewObra }) {
   const [creando, setCreando] = useState(false);
   const [obraId, setObraId] = useState(obras.filter(o=>o.estado!=="cerrada")[0]?.id||"");
   const [uploadStatus, setUploadStatus] = useState("");
-  const [programa, setPrograma] = useState({ obra_id:obras[0]?.id||"", semana:"", meta:"" });
-  const [programaObra, setProgramaObra] = useState(obras[0]?.id||"");
+  const [programaObra, setProgramaObra] = useState(obras.filter(o=>o.estado!=="cerrada")[0]?.id||"");
   const [programaRows, setProgramaRows] = useState([]);
   const [editingRow, setEditingRow] = useState(null);
   const [newSemana, setNewSemana] = useState("");
@@ -1127,12 +1126,12 @@ function AdminPanel({ obras, onBack, onObraCreated, setError, onViewObra }) {
         {tab==="programa" && (
           <Panel title="PROGRAMA SEMANAL">
             <Label>Obra</Label>
-            <select value={programa.obra_id} onChange={e=>setPrograma(p=>({...p,obra_id:e.target.value}))} style={inp}>
+            <select value={programaObra} onChange={e=>setProgramaObra(e.target.value)} style={inp}>
               {obrasActivas.map(o=><option key={o.id} value={o.id}>{o.nombre}</option>)}
             </select>
             <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr auto",gap:8,marginTop:12,alignItems:"flex-end" }}>
-              <div><Label>Semana (ej: 22.2026)</Label><input value={programa.semana} onChange={e=>setPrograma(p=>({...p,semana:e.target.value}))} placeholder="22.2026" style={inp}/></div>
-              <div><Label>m² programados</Label><input type="number" value={programa.meta} onChange={e=>setPrograma(p=>({...p,meta:e.target.value}))} placeholder="600" style={inp}/></div>
+              <div><Label>Semana (ej: 22.2026)</Label><input value={newSemana} onChange={e=>setNewSemana(e.target.value)} placeholder="22.2026" style={inp}/></div>
+              <div><Label>m² programados</Label><input type="number" value={newMeta} onChange={e=>setNewMeta(e.target.value)} placeholder="600" style={inp}/></div>
               <button onClick={agregarPrograma} style={{ ...btnPrimary,marginBottom:1 }}>+</button>
             </div>
             {programaRows.length>0&&(
