@@ -845,13 +845,15 @@ function AdminPanel({ obras, onBack, onObraCreated, setError, onViewObra }) {
         const realAcum = mountedArea; // total montado a la fecha (todo lo aprobado hasta ahora)
         const cumplimientoPct = programadoAcum>0 ? (realAcum/programadoAcum)*100 : null;
 
-        // Curva S data por obra (mismo formato que usa el componente CurvaS): {semana, acum, real}
+        // Curva S data por obra (mismo formato que usa el componente CurvaS): {semana, acum, real, realSemana}
         let acumProg = 0;
         const curvaSData = progData.map(p=>{
           acumProg += (p.meta||0);
           const realAcumSemana = Object.entries(weekMap).filter(([w])=>w<=p.semana).reduce((s,[,v])=>s+v,0);
           const hasRealData = Object.keys(weekMap).some(w=>w<=p.semana);
-          return { semana:p.semana, acum:acumProg, real: hasRealData ? realAcumSemana : null };
+          // realSemana: lo montado específicamente en ESA semana (no acumulado), para que la
+          // barra del gráfico muestre el real puntual y no un salto por trabajo previo sin programa.
+          return { semana:p.semana, acum:acumProg, real: hasRealData ? realAcumSemana : null, realSemana: weekMap[p.semana] ?? null };
         });
 
         // Rendimiento promedio: m² montados / día efectivo, promedio de las últimas semanas con datos
