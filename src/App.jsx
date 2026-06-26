@@ -952,14 +952,42 @@ function AdminPanel({ obras, onBack, onObraCreated, setError, onViewObra }) {
           elementos.push({ obra_id:obraId, lote:String(row[0]||"").trim(), torre:String(row[1]||"").trim(), piso:String(row[2]||"").trim(), tipo, pos, area, estado:"pendiente" });
         });
       });
-      let uploaded = 0;
-      for(let i=0;i<elementos.length;i+=100){
-        const batch = elementos.slice(i,i+100);
+
+      // Traer elementos ya cargados de esta obra para evitar duplicados (upsert por torre+piso+tipo+pos)
+      setUploadStatus("Comparando con elementos existentes...");
+      const existentes = await sbFetchAll(`elementos?obra_id=eq.${obraId}&select=id,torre,piso,tipo,pos,area`);
+      const existeMap = new Map(existentes.map(e=>[elKeyOf(e), e]));
+
+      const nuevos = [];
+      const actualizar = [];
+      elementos.forEach(el=>{
+        const key = elKeyOf(el);
+        const ex = existeMap.get(key);
+        if(!ex){
+          nuevos.push(el);
+        } else if(Math.abs(ex.area-el.area)>0.001){
+          // Mismo elemento (misma identidad), pero el área cambió en la lista nueva: actualizar
+          actualizar.push({ id:ex.id, area:el.area });
+        }
+        // Si existe y el área es igual, no se hace nada (evita duplicar).
+      });
+
+      let done = 0;
+      const total = nuevos.length + actualizar.length;
+      for(let i=0;i<nuevos.length;i+=100){
+        const batch = nuevos.slice(i,i+100);
         await sbFetch("elementos",{method:"POST",body:JSON.stringify(batch),headers:{"Prefer":"return=minimal"}});
-        uploaded += batch.length;
-        setUploadStatus(`Cargando... ${uploaded}/${elementos.length}`);
+        done += batch.length;
+        setUploadStatus(`Cargando nuevos... ${done}/${total||1}`);
       }
-      setUploadStatus(`✓ ${elementos.length} elementos cargados correctamente`);
+      for(const u of actualizar){
+        await sbFetch(`elementos?id=eq.${u.id}`,{method:"PATCH",body:JSON.stringify({area:u.area}),headers:{"Prefer":"return=minimal"}});
+        done++;
+        setUploadStatus(`Actualizando áreas... ${done}/${total||1}`);
+      }
+
+      const sinCambios = elementos.length - nuevos.length - actualizar.length;
+      setUploadStatus(`✓ Listo: ${nuevos.length} elementos nuevos, ${actualizar.length} actualizados, ${sinCambios} sin cambios (sin duplicar).`);
     } catch(e){ setUploadStatus("Error: "+e.message); }
     e.target.value="";
   }
@@ -1566,7 +1594,11 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
     return programa.map(p=>{
       acum+=p.meta;
       const realAcum=weeklyStats.filter(w=>w.week<=p.semana).reduce((s,w)=>s+w.areaTotal,0);
-      return {semana:p.semana,acum,real:weeklyStats.find(w=>w.week===p.semana)?realAcum:null};
+      // realSemana = lo montado específicamente en ESA semana (no acumulado), evita que trabajo
+      // previo sin fila de programa (ej. un piloto hecho antes del inicio del programa) se vea
+      // como si todo se hubiese montado de golpe en la primera semana con programa.
+      const realSemana = weeklyStats.find(w=>w.week===p.semana)?.areaTotal ?? null;
+      return {semana:p.semana,acum,real:weeklyStats.find(w=>w.week===p.semana)?realAcum:null,realSemana};
     });
   },[programa,weeklyStats]);
 
@@ -2702,7 +2734,10 @@ function drawCurvaSOnCanvas(ctx, data, W, H) {
     const n=data.length; if(n===0) return;
 
     const weeklyProg = data.map((d,i)=> d.acum-(i>0?data[i-1].acum:0));
-    const weeklyReal = data.map((d,i)=> d.real!==null?(d.real-(i>0&&data[i-1].real!==null?data[i-1].real:0)):null);
+    // weeklyReal viene directamente del dato real de esa semana específica (no por diferencia
+    // de acumulados), para que trabajo previo sin programa (ej. un piloto) no se vea reflejado
+    // como si todo hubiese pasado de golpe en la primera semana con fila de programa.
+    const weeklyReal = data.map(d=> d.realSemana ?? null);
     const maxAcumRaw = Math.max(...data.map(d=>Math.max(d.acum,d.real||0)),100);
     const maxWeekRaw = Math.max(...weeklyProg,...weeklyReal.filter(v=>v!==null),10);
     const maxAcum = Math.ceil(maxAcumRaw/2500)*2500;
