@@ -598,7 +598,7 @@ export default function App() {
       else setScreen("select");
     } catch(e){ setLoginError("Error al conectar"); }
   }
-  function handleAdminLogin() {
+function handleAdminLogin() {
   if(adminPin===ADMIN_PIN){
     setCurrentUser({nombre:"Admin",role:"admin"});
     setScreen("admin");
