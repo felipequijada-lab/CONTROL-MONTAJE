@@ -598,16 +598,12 @@ export default function App() {
       else setScreen("select");
     } catch(e){ setLoginError("Error al conectar"); }
   }
-function handleAdminLogin() {
-  if(adminPin===ADMIN_PIN){
-    setCurrentUser({nombre:"Admin",role:"admin"});
-    setScreen("admin");
-    setAdminError(false);
+
+  function handleAdminLogin() {
+    if(adminPin===ADMIN_PIN){ setCurrentUser({nombre:"Admin",role:"admin"}); setScreen("admin"); setAdminError(false); }
+    else setAdminError(true);
   }
-  else setAdminError(true);
-}
- 
-}
+
   function handleLogout() {
     setCurrentUser(null); setSelectedObra(null);
     setLoginMail(""); setLoginRut(""); setAdminPin(""); setLoginError("");
@@ -849,15 +845,13 @@ function AdminPanel({ obras, onBack, onObraCreated, setError, onViewObra }) {
         const realAcum = mountedArea; // total montado a la fecha (todo lo aprobado hasta ahora)
         const cumplimientoPct = programadoAcum>0 ? (realAcum/programadoAcum)*100 : null;
 
-        // Curva S data por obra (mismo formato que usa el componente CurvaS): {semana, acum, real, realSemana}
+        // Curva S data por obra (mismo formato que usa el componente CurvaS): {semana, acum, real}
         let acumProg = 0;
         const curvaSData = progData.map(p=>{
           acumProg += (p.meta||0);
           const realAcumSemana = Object.entries(weekMap).filter(([w])=>w<=p.semana).reduce((s,[,v])=>s+v,0);
           const hasRealData = Object.keys(weekMap).some(w=>w<=p.semana);
-          // realSemana: lo montado específicamente en ESA semana (no acumulado), para que la
-          // barra del gráfico muestre el real puntual y no un salto por trabajo previo sin programa.
-          return { semana:p.semana, acum:acumProg, real: hasRealData ? realAcumSemana : null, realSemana: weekMap[p.semana] ?? null };
+          return { semana:p.semana, acum:acumProg, real: hasRealData ? realAcumSemana : null };
         });
 
         // Rendimiento promedio: m² montados / día efectivo, promedio de las últimas semanas con datos
@@ -1600,11 +1594,7 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
     return programa.map(p=>{
       acum+=p.meta;
       const realAcum=weeklyStats.filter(w=>w.week<=p.semana).reduce((s,w)=>s+w.areaTotal,0);
-      // realSemana = lo montado específicamente en ESA semana (no acumulado), evita que trabajo
-      // previo sin fila de programa (ej. un piloto hecho antes del inicio del programa) se vea
-      // como si todo se hubiese montado de golpe en la primera semana con programa.
-      const realSemana = weeklyStats.find(w=>w.week===p.semana)?.areaTotal ?? null;
-      return {semana:p.semana,acum,real:weeklyStats.find(w=>w.week===p.semana)?realAcum:null,realSemana};
+      return {semana:p.semana,acum,real:weeklyStats.find(w=>w.week===p.semana)?realAcum:null};
     });
   },[programa,weeklyStats]);
 
@@ -2740,10 +2730,7 @@ function drawCurvaSOnCanvas(ctx, data, W, H) {
     const n=data.length; if(n===0) return;
 
     const weeklyProg = data.map((d,i)=> d.acum-(i>0?data[i-1].acum:0));
-    // weeklyReal viene directamente del dato real de esa semana específica (no por diferencia
-    // de acumulados), para que trabajo previo sin programa (ej. un piloto) no se vea reflejado
-    // como si todo hubiese pasado de golpe en la primera semana con fila de programa.
-    const weeklyReal = data.map(d=> d.realSemana ?? null);
+    const weeklyReal = data.map((d,i)=> d.real!==null?(d.real-(i>0&&data[i-1].real!==null?data[i-1].real:0)):null);
     const maxAcumRaw = Math.max(...data.map(d=>Math.max(d.acum,d.real||0)),100);
     const maxWeekRaw = Math.max(...weeklyProg,...weeklyReal.filter(v=>v!==null),10);
     const maxAcum = Math.ceil(maxAcumRaw/2500)*2500;
