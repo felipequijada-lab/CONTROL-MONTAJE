@@ -598,15 +598,15 @@ export default function App() {
       else setScreen("select");
     } catch(e){ setLoginError("Error al conectar"); }
   }
-
   function handleAdminLogin() {
-  if (ADMIN_PINS.includes(adminPin)) {
-    setCurrentUser({ nombre: "Admin", role: "admin" });
+  if(adminPin===ADMIN_PIN){
+    setCurrentUser({nombre:"Admin",role:"admin"});
     setScreen("admin");
     setAdminError(false);
-  } else {
-    setAdminError(true);
   }
+  else setAdminError(true);
+}
+ 
 }
   function handleLogout() {
     setCurrentUser(null); setSelectedObra(null);
