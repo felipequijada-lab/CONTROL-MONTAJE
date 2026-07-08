@@ -3,7 +3,7 @@ import * as XLSX from "xlsx";
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "https://uxgkiuhcqcvcwkvtjqvo.supabase.co";
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_KEY || "sb_publishable_CSpI4hVvQmUWai7oQcPmuQ_mZe3EYqA";
-const ADMIN_PIN = "18670610";
+const ADMIN_PINS = ["18670610", "18663499"];
 const TIPOS_MD = ["MD", "MDT"];
 
 const fmt2 = n => isNaN(n) ? "0.00" : (Math.round(n*100)/100).toFixed(2);
@@ -600,7 +600,7 @@ export default function App() {
   }
 
   function handleAdminLogin() {
-    if(adminPin===ADMIN_PIN){ setCurrentUser({nombre:"Admin",role:"admin"}); setScreen("admin"); setAdminError(false); }
+    if(ADMIN_PINS.includes(adminPin)){ setCurrentUser({nombre:"Admin",role:"admin"}); setScreen("admin"); setAdminError(false); }
     else setAdminError(true);
   }
 
@@ -1298,7 +1298,7 @@ function AdminPanel({ obras, onBack, onObraCreated, setError, onViewObra }) {
             <Panel title="ADMINISTRADORES">
               <div style={{ fontSize:11,color:"#64748b",marginBottom:12 }}>Los administradores acceden con PIN. PIN actual: <span style={{ color:"#d97706",fontWeight:"bold" }}>configurado en el código</span></div>
               <div style={{ background:"#fef9c3",border:"1px solid #fde68a",borderRadius:6,padding:10,fontSize:11,color:"#92400e" }}>
-                Para cambiar el PIN de administrador, editá la constante <b>ADMIN_PIN</b> en el archivo App.jsx y hacé deploy.
+                Para agregar o cambiar PINs de administrador, editá la constante <b>ADMIN_PINS</b> en el archivo App.jsx y hacé deploy.
               </div>
             </Panel>
           </div>
