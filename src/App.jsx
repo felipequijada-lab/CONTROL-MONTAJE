@@ -563,9 +563,207 @@ ${adminStats.map((a,i)=>`<div class="section" style="page-break-before:always"><
   },500);
 }
 
+// ── Portal de Cliente (vista pública, solo lectura) ────────────────────────────
+function ClientePortal({ token }) {
+  const [obra, setObra] = useState(null);
+  const [elements, setElements] = useState([]);
+  const [dailyStats, setDailyStats] = useState([]);
+  const [programa, setPrograma] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(()=>{
+    async function load() {
+      try {
+        // Resolve token → obra
+        const tokens = await sbFetch(`obra_tokens?token=eq.${token}&select=obra_id`);
+        if(tokens.length===0){ setError("Link inválido o expirado."); setLoading(false); return; }
+        const obraId = tokens[0].obra_id;
+        const obras = await sbFetch(`obras?id=eq.${obraId}&select=*`);
+        if(obras.length===0){ setError("Obra no encontrada."); setLoading(false); return; }
+        setObra(obras[0]);
+        const [elems, regs, prog] = await Promise.all([
+          sbFetchAll(`elementos?obra_id=eq.${obraId}&select=*`),
+          sbFetch(`registros?obra_id=eq.${obraId}&select=*`),
+          sbFetch(`programa?obra_id=eq.${obraId}&select=*&order=semana.asc`),
+        ]);
+        setElements(elems);
+        setPrograma(prog);
+        const logs = regs.filter(r=>r.aprobado).map(r=>({
+          date:r.fecha,
+          montados:(r.elementos_montados||"").split(",").map(p=>p.trim()).filter(Boolean),
+          recibidos:(r.elementos_recibidos||"").split(",").map(p=>p.trim()).filter(Boolean),
+          areaTotal:(r.m2_md||0)+(r.m2_p||0),
+          areaRecibida:0,
+        }));
+        setDailyStats(logs);
+      } catch(e){ setError("Error al cargar: "+e.message); }
+      setLoading(false);
+    }
+    load();
+  },[token]);
+
+  if(loading) return <LoadingScreen/>;
+  if(error) return (
+    <div style={{ minHeight:"100vh",background:"#f1f5f9",display:"flex",alignItems:"center",justifyContent:"center" }}>
+      <div style={{ textAlign:"center",color:"#64748b" }}>
+        <div style={{ fontSize:40,marginBottom:12 }}>⚠</div>
+        <div style={{ fontFamily:"'DM Mono',monospace",fontSize:14 }}>{error}</div>
+      </div>
+    </div>
+  );
+  if(!obra) return null;
+
+  // Compute KPIs
+  const montadosPos = new Set(dailyStats.flatMap(d=>d.montados));
+  const recibidosPos = new Set(dailyStats.flatMap(d=>d.recibidos));
+  const totalArea = elements.reduce((s,e)=>s+e.area,0);
+  const mountedArea = elements.filter(e=>elMatchesKeys(e,montadosPos)).reduce((s,e)=>s+e.area,0);
+  const receivedArea = elements.filter(e=>elMatchesKeys(e,recibidosPos)||elMatchesKeys(e,montadosPos)).reduce((s,e)=>s+e.area,0);
+  const stockArea = elements.filter(e=>elMatchesKeys(e,recibidosPos)&&!elMatchesKeys(e,montadosPos)).reduce((s,e)=>s+e.area,0);
+  const pctMounted = totalArea>0?(mountedArea/totalArea)*100:0;
+  const pctReceived = totalArea>0?(receivedArea/totalArea)*100:0;
+  const lastUpdate = dailyStats.length>0 ? [...dailyStats].sort((a,b)=>b.date.localeCompare(a.date))[0].date : null;
+
+  // ProgramaAcum for CurvaS
+  let acum=0;
+  const weeklyMap = {};
+  dailyStats.forEach(d=>{ const w=getWeekNumber(d.date); weeklyMap[w]=(weeklyMap[w]||0)+d.areaTotal; });
+  const programaAcum = programa.map(p=>{
+    acum+=p.meta;
+    const realAcumSemana=Object.entries(weeklyMap).filter(([w])=>w<=p.semana).reduce((s,[,v])=>s+v,0);
+    return {semana:p.semana,acum,real:Object.keys(weeklyMap).some(w=>w<=p.semana)?realAcumSemana:null,realSemana:weeklyMap[p.semana]??null};
+  });
+
+  // Mounted elements list
+  const mountedElements = elements.filter(e=>elMatchesKeys(e,montadosPos))
+    .sort((a,b)=>(a.torre+a.piso+a.pos).localeCompare(b.torre+b.piso+b.pos));
+  const receivedOnlyElements = elements.filter(e=>elMatchesKeys(e,recibidosPos)&&!elMatchesKeys(e,montadosPos))
+    .sort((a,b)=>(a.torre+a.piso+a.pos).localeCompare(b.torre+b.piso+b.pos));
+
+  const kpiStyle = { background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:"16px 20px",textAlign:"center",flex:1 };
+
+  return (
+    <div style={{ minHeight:"100vh",background:"#f1f5f9",fontFamily:"'DM Mono','Courier New',monospace" }}>
+      <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Archivo+Black&display=swap" rel="stylesheet"/>
+
+      {/* Header */}
+      <div style={{ background:"#fff",borderBottom:"1px solid #e2e8f0",padding:"16px 32px",display:"flex",justifyContent:"space-between",alignItems:"center" }}>
+        <div>
+          <div style={{ fontFamily:"'Archivo Black',sans-serif",fontSize:22,color:"#d97706" }}>◈ CONTROL DE MONTAJE</div>
+          <div style={{ fontSize:10,color:"#94a3b8",letterSpacing:3,marginTop:2 }}>BAUMAX SPA · PORTAL DE AVANCE</div>
+        </div>
+        <div style={{ textAlign:"right" }}>
+          <div style={{ fontFamily:"'Archivo Black',sans-serif",fontSize:16,color:"#1e293b" }}>{obra.nombre}</div>
+          <div style={{ fontSize:10,color:"#94a3b8",marginTop:2 }}>{obra.ubicacion}</div>
+          {lastUpdate&&<div style={{ fontSize:9,color:"#cbd5e1",marginTop:4 }}>Actualizado al {lastUpdate}</div>}
+        </div>
+      </div>
+
+      {obra.listado_estado!=="definitivo"&&(
+        <div style={{ background:"#fff7ed",borderBottom:"1px solid #fed7aa",padding:"8px 32px",fontSize:10,color:"#9a3412" }}>
+          ⚠ Los datos de avance son sobre un listado de elementos <b>preliminar</b> y pueden ajustarse.
+        </div>
+      )}
+
+      <div style={{ maxWidth:1100,margin:"0 auto",padding:"28px 24px" }}>
+
+        {/* KPIs */}
+        <div style={{ display:"flex",gap:12,marginBottom:24,flexWrap:"wrap" }}>
+          <div style={kpiStyle}>
+            <div style={{ fontSize:9,color:"#94a3b8",letterSpacing:2,marginBottom:8 }}>m² TOTAL OBRA</div>
+            <div style={{ fontSize:26,fontWeight:"bold",color:"#1e293b",fontFamily:"'Archivo Black',sans-serif" }}>{fmt2(totalArea)}</div>
+          </div>
+          <div style={kpiStyle}>
+            <div style={{ fontSize:9,color:"#94a3b8",letterSpacing:2,marginBottom:8 }}>m² DESPACHADOS</div>
+            <div style={{ fontSize:26,fontWeight:"bold",color:"#2563eb",fontFamily:"'Archivo Black',sans-serif" }}>{fmt2(receivedArea)}</div>
+            <div style={{ fontSize:10,color:"#94a3b8",marginTop:4 }}>{fmtPct(pctReceived)} del total</div>
+          </div>
+          <div style={kpiStyle}>
+            <div style={{ fontSize:9,color:"#94a3b8",letterSpacing:2,marginBottom:8 }}>m² MONTADOS</div>
+            <div style={{ fontSize:26,fontWeight:"bold",color:"#16a34a",fontFamily:"'Archivo Black',sans-serif" }}>{fmt2(mountedArea)}</div>
+            <div style={{ fontSize:10,color:"#94a3b8",marginTop:4 }}>{fmtPct(pctMounted)} del total</div>
+          </div>
+          <div style={kpiStyle}>
+            <div style={{ fontSize:9,color:"#94a3b8",letterSpacing:2,marginBottom:8 }}>m² STOCK EN OBRA</div>
+            <div style={{ fontSize:26,fontWeight:"bold",color:"#f59e0b",fontFamily:"'Archivo Black',sans-serif" }}>{fmt2(stockArea)}</div>
+            <div style={{ fontSize:10,color:"#94a3b8",marginTop:4 }}>Recibido, pendiente de montaje</div>
+          </div>
+        </div>
+
+        {/* Plano de avance */}
+        <div style={{ background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:"20px",marginBottom:20 }}>
+          <div style={{ fontSize:9,color:"#d97706",letterSpacing:3,marginBottom:16 }}>PLANO DE AVANCE — TORRES Y PISOS</div>
+          <PlanoAvance elements={elements} montadosPos={montadosPos}/>
+        </div>
+
+        {/* Curva S */}
+        {programaAcum.length>0&&(
+          <div style={{ background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:"20px",marginBottom:20 }}>
+            <div style={{ fontSize:9,color:"#d97706",letterSpacing:3,marginBottom:16 }}>CURVA S — AVANCE PROGRAMADO vs REAL</div>
+            <CurvaS data={programaAcum} obraNombre={obra.nombre}/>
+          </div>
+        )}
+
+        {/* Elementos montados */}
+        {mountedElements.length>0&&(
+          <div style={{ background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:"20px",marginBottom:20 }}>
+            <div style={{ fontSize:9,color:"#d97706",letterSpacing:3,marginBottom:16 }}>ELEMENTOS MONTADOS ({mountedElements.length})</div>
+            <div style={{ overflowX:"auto" }}>
+              <table style={{ width:"100%",borderCollapse:"collapse",fontSize:11 }}>
+                <thead><tr style={{ background:"#f8fafc" }}>
+                  <th style={{ padding:"6px 10px",textAlign:"left",color:"#64748b",fontSize:9,borderBottom:"1px solid #e2e8f0" }}>TORRE</th>
+                  <th style={{ padding:"6px 10px",textAlign:"left",color:"#64748b",fontSize:9,borderBottom:"1px solid #e2e8f0" }}>PISO</th>
+                  <th style={{ padding:"6px 10px",textAlign:"left",color:"#64748b",fontSize:9,borderBottom:"1px solid #e2e8f0" }}>TIPO</th>
+                  <th style={{ padding:"6px 10px",textAlign:"left",color:"#64748b",fontSize:9,borderBottom:"1px solid #e2e8f0" }}>POSICIÓN</th>
+                  <th style={{ padding:"6px 10px",textAlign:"right",color:"#64748b",fontSize:9,borderBottom:"1px solid #e2e8f0" }}>ÁREA m²</th>
+                  <th style={{ padding:"6px 10px",textAlign:"center",color:"#64748b",fontSize:9,borderBottom:"1px solid #e2e8f0" }}>ESTADO</th>
+                </tr></thead>
+                <tbody>
+                  {mountedElements.map(el=>(
+                    <tr key={elKeyOf(el)} style={{ borderBottom:"1px solid #f8fafc" }}>
+                      <td style={{ padding:"5px 10px",color:"#1e293b" }}>{el.torre}</td>
+                      <td style={{ padding:"5px 10px",color:"#475569" }}>{el.piso}</td>
+                      <td style={{ padding:"5px 10px",color:TIPOS_MD.includes(el.tipo)?"#16a34a":"#2563eb",fontWeight:"bold" }}>{el.tipo}</td>
+                      <td style={{ padding:"5px 10px",color:"#475569" }}>{el.pos}</td>
+                      <td style={{ padding:"5px 10px",textAlign:"right",color:"#475569" }}>{fmt2(el.area)}</td>
+                      <td style={{ padding:"5px 10px",textAlign:"center" }}><span style={{ background:"#dcfce7",color:"#16a34a",fontSize:9,padding:"2px 8px",borderRadius:10,fontWeight:"bold" }}>🔧 MONTADO</span></td>
+                    </tr>
+                  ))}
+                  {receivedOnlyElements.map(el=>(
+                    <tr key={elKeyOf(el)} style={{ borderBottom:"1px solid #f8fafc" }}>
+                      <td style={{ padding:"5px 10px",color:"#1e293b" }}>{el.torre}</td>
+                      <td style={{ padding:"5px 10px",color:"#475569" }}>{el.piso}</td>
+                      <td style={{ padding:"5px 10px",color:TIPOS_MD.includes(el.tipo)?"#16a34a":"#2563eb",fontWeight:"bold" }}>{el.tipo}</td>
+                      <td style={{ padding:"5px 10px",color:"#475569" }}>{el.pos}</td>
+                      <td style={{ padding:"5px 10px",textAlign:"right",color:"#475569" }}>{fmt2(el.area)}</td>
+                      <td style={{ padding:"5px 10px",textAlign:"center" }}><span style={{ background:"#dbeafe",color:"#2563eb",fontSize:9,padding:"2px 8px",borderRadius:10,fontWeight:"bold" }}>📦 EN OBRA</span></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        <div style={{ textAlign:"center",color:"#cbd5e1",fontSize:9,marginTop:24 }}>
+          Portal de avance · Baumax SPA · Control de Montaje · {lastUpdate ? `Actualizado al ${lastUpdate}` : ""}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Main App ──────────────────────────────────────────────────────────────────
 export default function App() {
-  const [screen, setScreen] = useState("login");
+  // Detect /cliente/TOKEN in URL for client portal (no login needed)
+  const urlToken = (() => {
+    const m = window.location.pathname.match(/\/cliente\/([a-f0-9]+)/i);
+    return m ? m[1] : null;
+  })();
+
+  const [screen, setScreen] = useState(urlToken ? "cliente" : "login");
+  const [clienteToken] = useState(urlToken);
   const [obras, setObras] = useState([]);
   const [selectedObra, setSelectedObra] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
@@ -621,6 +819,7 @@ export default function App() {
       {screen==="admin"      && <AdminPanel obras={obras} onBack={handleLogout} onObraCreated={loadObras} setError={setError} onViewObra={o=>{setSelectedObra(o);setScreen("obraAdmin");}}/>}
       {screen==="obra"       && selectedObra && <ObraView obra={selectedObra} onBack={()=>{currentUser?.role==="admin"?setScreen("admin"):setScreen("select");}} setError={setError} isAdmin={false} currentUser={currentUser}/>}
       {screen==="obraAdmin"  && selectedObra && <ObraView obra={selectedObra} onBack={()=>setScreen("admin")} setError={setError} isAdmin={true} currentUser={currentUser} onObraUpdated={loadObras}/>}
+      {screen==="cliente"    && <ClientePortal token={clienteToken}/>}
     </div>
   );
 }
@@ -929,6 +1128,24 @@ function AdminPanel({ obras, onBack, onObraCreated, setError, onViewObra }) {
     } catch(e){ setError("Error: "+e.message); }
   }
 
+  async function generarLinkCliente(obra) {
+    try {
+      // Check if token already exists
+      const existing = await sbFetch(`obra_tokens?obra_id=eq.${obra.id}&select=token`);
+      let token;
+      if(existing.length>0){
+        token = existing[0].token;
+      } else {
+        const created = await sbFetch("obra_tokens",{method:"POST",body:JSON.stringify({obra_id:obra.id})});
+        token = created[0]?.token;
+      }
+      if(!token){ setError("No se pudo generar el token"); return; }
+      const url = `${window.location.origin}/cliente/${token}`;
+      await navigator.clipboard.writeText(url);
+      alert(`¡Link copiado al portapapeles!\n\n${url}\n\nCompartilo con tu cliente.`);
+    } catch(e){ setError("Error: "+e.message); }
+  }
+
   async function handleExcelUpload(e) {
     const file = e.target.files[0];
     if(!file||!obraId) return;
@@ -1142,6 +1359,7 @@ function AdminPanel({ obras, onBack, onObraCreated, setError, onViewObra }) {
                     <button onClick={()=>toggleListadoEstado(o)} style={{ background:"#f1f5f9",color:"#475569",border:"1px solid #cbd5e1",borderRadius:6,padding:"6px 12px",cursor:"pointer",fontFamily:"'DM Mono',monospace",fontSize:10 }}>
                       Marcar como {o.listado_estado==="definitivo"?"Preliminar":"Definitivo"}
                     </button>
+                    <button onClick={()=>generarLinkCliente(o)} style={{ background:"#eff6ff",color:"#2563eb",border:"1px solid #bfdbfe",borderRadius:6,padding:"6px 12px",cursor:"pointer",fontFamily:"'DM Mono',monospace",fontSize:10 }}>🔗 Link cliente</button>
                     <button onClick={()=>onViewObra(o)} style={{ ...btnSecondary,padding:"6px 12px",fontSize:10 }}>Ver →</button>
                     <button onClick={()=>cerrarObra(o)} style={{ background:"#fee2e2",color:"#dc2626",border:"1px solid #fecaca",borderRadius:6,padding:"6px 12px",cursor:"pointer",fontFamily:"'DM Mono',monospace",fontSize:10 }}>✕ Cerrar Obra</button>
                   </div>
