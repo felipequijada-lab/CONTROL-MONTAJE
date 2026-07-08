@@ -581,6 +581,7 @@ function ClientePortal({ token }) {
         const obraId = tokens[0].obra_id;
         const obras = await sbFetch(`obras?id=eq.${obraId}&select=*`);
         if(obras.length===0){ setError("Obra no encontrada."); setLoading(false); return; }
+        if(obras[0].estado==="cerrada"){ setError("Este link ha expirado — la obra fue cerrada."); setLoading(false); return; }
         setObra(obras[0]);
         const [elems, regs, prog] = await Promise.all([
           sbFetchAll(`elementos?obra_id=eq.${obraId}&select=*`),
@@ -589,13 +590,18 @@ function ClientePortal({ token }) {
         ]);
         setElements(elems);
         setPrograma(prog);
-        const logs = regs.filter(r=>r.aprobado).map(r=>({
-          date:r.fecha,
-          montados:(r.elementos_montados||"").split(",").map(p=>p.trim()).filter(Boolean),
-          recibidos:(r.elementos_recibidos||"").split(",").map(p=>p.trim()).filter(Boolean),
-          areaTotal:(r.m2_md||0)+(r.m2_p||0),
-          areaRecibida:0,
-        }));
+        const logs = regs.filter(r=>r.aprobado).map(r=>{
+          const montadosKeys = (r.elementos_montados||"").split(",").map(p=>p.trim()).filter(Boolean);
+          const recibidosKeys = (r.elementos_recibidos||"").split(",").map(p=>p.trim()).filter(Boolean);
+          const areaRecibida = elems.filter(e=>recibidosKeys.some(k=>k===elKeyOf(e)||k===`${e.pos}__${e.tipo}`||k===e.pos)).reduce((s,e)=>s+e.area,0);
+          return {
+            date:r.fecha,
+            montados:montadosKeys,
+            recibidos:recibidosKeys,
+            areaTotal:(r.m2_md||0)+(r.m2_p||0),
+            areaRecibida,
+          };
+        });
         setDailyStats(logs);
       } catch(e){ setError("Error al cargar: "+e.message); }
       setLoading(false);
@@ -690,6 +696,56 @@ function ClientePortal({ token }) {
             <div style={{ fontSize:10,color:"#94a3b8",marginTop:4 }}>Recibido, pendiente de montaje</div>
           </div>
         </div>
+
+        {/* Últimos 10 días con actividad */}
+        {(() => {
+          const ultimos10 = [...dailyStats]
+            .filter(d=>d.areaTotal>0||d.areaRecibida>0)
+            .sort((a,b)=>b.date.localeCompare(a.date))
+            .slice(0,10)
+            .reverse();
+          if(ultimos10.length===0) return null;
+          return (
+            <div style={{ background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:"20px",marginBottom:20 }}>
+              <div style={{ fontSize:9,color:"#d97706",letterSpacing:3,marginBottom:16 }}>ACTIVIDAD RECIENTE — ÚLTIMOS {ultimos10.length} DÍAS</div>
+              <table style={{ width:"100%",borderCollapse:"collapse",fontSize:11 }}>
+                <thead><tr style={{ background:"#f8fafc" }}>
+                  <th style={{ padding:"6px 10px",textAlign:"left",color:"#64748b",fontSize:9,borderBottom:"1px solid #e2e8f0" }}>FECHA</th>
+                  <th style={{ padding:"6px 10px",textAlign:"right",color:"#2563eb",fontSize:9,borderBottom:"1px solid #e2e8f0" }}>m² DESPACHADOS</th>
+                  <th style={{ padding:"6px 10px",textAlign:"right",color:"#16a34a",fontSize:9,borderBottom:"1px solid #e2e8f0" }}>m² MONTADOS</th>
+                </tr></thead>
+                <tbody>
+                  {ultimos10.map(d=>{
+                    const parts = d.date.split('-');
+                    const meses=['','ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+                    const fechaLabel = `${parts[2]} ${meses[parseInt(parts[1])]} ${parts[0]}`;
+                    const esHoy = d.date === new Date().toISOString().slice(0,10);
+                    return (
+                      <tr key={d.date} style={{ borderBottom:"1px solid #f8fafc",background:esHoy?"#fffbeb":"#fff" }}>
+                        <td style={{ padding:"7px 10px",color:esHoy?"#d97706":"#475569",fontWeight:esHoy?"bold":"normal" }}>
+                          {fechaLabel}{esHoy?" (hoy)":""}
+                        </td>
+                        <td style={{ padding:"7px 10px",textAlign:"right",color:"#2563eb" }}>
+                          {d.areaRecibida>0?fmt2(d.areaRecibida):"—"}
+                        </td>
+                        <td style={{ padding:"7px 10px",textAlign:"right",color:"#16a34a",fontWeight:"bold" }}>
+                          {d.areaTotal>0?fmt2(d.areaTotal):"—"}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+                <tfoot>
+                  <tr style={{ background:"#f8fafc",fontWeight:"bold" }}>
+                    <td style={{ padding:"7px 10px",fontSize:10,color:"#64748b" }}>TOTAL PERÍODO</td>
+                    <td style={{ padding:"7px 10px",textAlign:"right",color:"#2563eb",fontSize:10 }}>{fmt2(ultimos10.reduce((s,d)=>s+d.areaRecibida,0))} m²</td>
+                    <td style={{ padding:"7px 10px",textAlign:"right",color:"#16a34a",fontSize:10 }}>{fmt2(ultimos10.reduce((s,d)=>s+d.areaTotal,0))} m²</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          );
+        })()}
 
         {/* Plano de avance */}
         <div style={{ background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:"20px",marginBottom:20 }}>
@@ -1130,11 +1186,20 @@ function AdminPanel({ obras, onBack, onObraCreated, setError, onViewObra }) {
 
   async function generarLinkCliente(obra) {
     try {
-      // Check if token already exists
-      const existing = await sbFetch(`obra_tokens?obra_id=eq.${obra.id}&select=token`);
+      const existing = await sbFetch(`obra_tokens?obra_id=eq.${obra.id}&select=token,id`);
       let token;
       if(existing.length>0){
-        token = existing[0].token;
+        const accion = window.confirm(
+          `Esta obra ya tiene un link activo.\n\nOK → Copiar el link existente\nCancelar → Generar un link NUEVO (invalida el anterior)`
+        );
+        if(accion){
+          token = existing[0].token;
+        } else {
+          // Revoke old and create new
+          await sbFetch(`obra_tokens?id=eq.${existing[0].id}`,{method:"DELETE",headers:{"Prefer":"return=minimal"}});
+          const created = await sbFetch("obra_tokens",{method:"POST",body:JSON.stringify({obra_id:obra.id})});
+          token = created[0]?.token;
+        }
       } else {
         const created = await sbFetch("obra_tokens",{method:"POST",body:JSON.stringify({obra_id:obra.id})});
         token = created[0]?.token;
