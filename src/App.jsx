@@ -563,6 +563,116 @@ ${adminStats.map((a,i)=>`<div class="section" style="page-break-before:always"><
   },500);
 }
 
+// ── Tabla de elementos para portal cliente (filtrable, con fechas) ─────────────
+function ClienteElementosTable({ elements, dailyStats, montadosPos, recibidosPos }) {
+  const [fTorre, setFTorre] = useState("TODAS");
+  const [fPiso,  setFPiso]  = useState("TODOS");
+  const [fTipo,  setFTipo]  = useState("TODOS");
+  const [fLote,  setFLote]  = useState("TODOS");
+  const [fEstado,setFEstado]= useState("TODOS");
+  const [page, setPage]     = useState(0);
+  const PER_PAGE = 100;
+
+  const torres = ["TODAS",...new Set(elements.map(e=>e.torre).filter(Boolean)).keys()].sort();
+  const pisos  = ["TODOS",...new Set(elements.map(e=>e.piso).filter(Boolean))].sort((a,b)=>a==="TODOS"?-1:Number(a)-Number(b));
+  const lotes  = ["TODOS",...new Set(elements.map(e=>e.lote).filter(Boolean))].sort();
+
+  // Build fecha maps from dailyStats
+  const fechaRecepcion = {};
+  const fechaMontaje = {};
+  dailyStats.forEach(d=>{
+    d.recibidos.forEach(k=>{ if(!fechaRecepcion[k]) fechaRecepcion[k]=d.date; });
+    d.montados.forEach(k=>{  if(!fechaMontaje[k])   fechaMontaje[k]=d.date;   });
+  });
+
+  function getFechaR(e){ return fechaRecepcion[elKeyOf(e)]||fechaRecepcion[`${e.pos}__${e.tipo}`]||fechaRecepcion[e.pos]||null; }
+  function getFechaM(e){ return fechaMontaje[elKeyOf(e)]  ||fechaMontaje[`${e.pos}__${e.tipo}`]  ||fechaMontaje[e.pos]  ||null; }
+
+  function getEstadoEl(e){
+    if(elMatchesKeys(e,montadosPos)) return "montado";
+    if(elMatchesKeys(e,recibidosPos)) return "recibido";
+    return "pendiente";
+  }
+
+  const filtered = elements.filter(e=>{
+    if(fTorre!=="TODAS"&&e.torre!==fTorre) return false;
+    if(fPiso!=="TODOS"&&String(e.piso)!==String(fPiso)) return false;
+    if(fTipo!=="TODOS"&&e.tipo!==fTipo) return false;
+    if(fLote!=="TODOS"&&e.lote!==fLote) return false;
+    if(fEstado!=="TODOS"&&getEstadoEl(e)!==fEstado) return false;
+    return true;
+  }).sort((a,b)=>(a.torre+a.piso+a.pos).localeCompare(b.torre+b.piso+b.pos));
+
+  const paginated = filtered.slice(page*PER_PAGE,(page+1)*PER_PAGE);
+  const totalPages = Math.ceil(filtered.length/PER_PAGE);
+
+  const resetPage = () => setPage(0);
+  const selStyle = { background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:6,padding:"5px 8px",fontSize:10,fontFamily:"'DM Mono',monospace",color:"#475569",cursor:"pointer" };
+
+  const estadoBadge = (est) => {
+    if(est==="montado")  return <span style={{ background:"#dcfce7",color:"#16a34a",fontSize:8,padding:"2px 7px",borderRadius:10,fontWeight:"bold" }}>🔧 MONTADO</span>;
+    if(est==="recibido") return <span style={{ background:"#dbeafe",color:"#2563eb",fontSize:8,padding:"2px 7px",borderRadius:10,fontWeight:"bold" }}>📦 EN OBRA</span>;
+    return <span style={{ background:"#f1f5f9",color:"#94a3b8",fontSize:8,padding:"2px 7px",borderRadius:10 }}>⏳ PENDIENTE</span>;
+  };
+
+  return (
+    <div style={{ background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:"20px",marginBottom:20 }}>
+      <div style={{ fontSize:9,color:"#d97706",letterSpacing:3,marginBottom:14 }}>LISTADO DE ELEMENTOS ({filtered.length} de {elements.length})</div>
+
+      {/* Filters */}
+      <div style={{ display:"flex",gap:8,marginBottom:14,flexWrap:"wrap" }}>
+        <select value={fLote}   onChange={e=>{setFLote(e.target.value);resetPage();}}   style={selStyle}>{lotes.map(t=><option key={t} value={t}>{t==="TODOS"?"Lote: Todos":t}</option>)}</select>
+        <select value={fTorre}  onChange={e=>{setFTorre(e.target.value);resetPage();}}  style={selStyle}>{torres.map(t=><option key={t} value={t}>{t==="TODAS"?"Torre: Todas":t}</option>)}</select>
+        <select value={fPiso}   onChange={e=>{setFPiso(e.target.value);resetPage();}}   style={selStyle}>{pisos.map(t=><option key={t} value={t}>{t==="TODOS"?"Piso: Todos":t}</option>)}</select>
+        <select value={fTipo}   onChange={e=>{setFTipo(e.target.value);resetPage();}}   style={selStyle}>{["TODOS","MD","MDT","P"].map(t=><option key={t} value={t}>{t==="TODOS"?"Tipo: Todos":t}</option>)}</select>
+        <select value={fEstado} onChange={e=>{setFEstado(e.target.value);resetPage();}} style={selStyle}>{["TODOS","pendiente","recibido","montado"].map(t=><option key={t} value={t}>{t==="TODOS"?"Estado: Todos":t.charAt(0).toUpperCase()+t.slice(1)}</option>)}</select>
+      </div>
+
+      {/* Pagination */}
+      {totalPages>1&&(
+        <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10,fontSize:10,color:"#64748b" }}>
+          <span>Pág. {page+1} / {totalPages}</span>
+          <div style={{ display:"flex",gap:4 }}>
+            <button onClick={()=>setPage(0)} disabled={page===0} style={{ ...selStyle,opacity:page===0?0.4:1 }}>«</button>
+            <button onClick={()=>setPage(p=>p-1)} disabled={page===0} style={{ ...selStyle,opacity:page===0?0.4:1 }}>‹</button>
+            <button onClick={()=>setPage(p=>p+1)} disabled={page+1>=totalPages} style={{ ...selStyle,opacity:page+1>=totalPages?0.4:1 }}>›</button>
+            <button onClick={()=>setPage(totalPages-1)} disabled={page+1>=totalPages} style={{ ...selStyle,opacity:page+1>=totalPages?0.4:1 }}>»</button>
+          </div>
+        </div>
+      )}
+
+      <div style={{ overflowX:"auto" }}>
+        <table style={{ width:"100%",borderCollapse:"collapse",fontSize:10 }}>
+          <thead><tr style={{ background:"#f8fafc" }}>
+            {["LOTE","TORRE","PISO","TIPO","POSICIÓN","ÁREA m²","ESTADO","F. RECEPCIÓN","F. MONTAJE"].map(h=>(
+              <th key={h} style={{ padding:"6px 8px",textAlign:"left",color:"#64748b",fontSize:8,borderBottom:"1px solid #e2e8f0",whiteSpace:"nowrap" }}>{h}</th>
+            ))}
+          </tr></thead>
+          <tbody>
+            {paginated.map(el=>{
+              const est = getEstadoEl(el);
+              return (
+                <tr key={elKeyOf(el)} style={{ borderBottom:"1px solid #f8fafc" }}>
+                  <td style={{ padding:"5px 8px",color:"#475569" }}>{el.lote||"—"}</td>
+                  <td style={{ padding:"5px 8px",color:"#1e293b",fontWeight:"bold" }}>{el.torre}</td>
+                  <td style={{ padding:"5px 8px",color:"#475569" }}>{el.piso}</td>
+                  <td style={{ padding:"5px 8px",color:TIPOS_MD.includes(el.tipo)?"#16a34a":"#2563eb",fontWeight:"bold" }}>{el.tipo}</td>
+                  <td style={{ padding:"5px 8px",color:"#475569" }}>{el.pos}</td>
+                  <td style={{ padding:"5px 8px",textAlign:"right",color:"#475569" }}>{fmt2(el.area)}</td>
+                  <td style={{ padding:"5px 8px" }}>{estadoBadge(est)}</td>
+                  <td style={{ padding:"5px 8px",color:"#64748b",whiteSpace:"nowrap" }}>{getFechaR(el)||"—"}</td>
+                  <td style={{ padding:"5px 8px",color:"#64748b",whiteSpace:"nowrap" }}>{getFechaM(el)||"—"}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+        {filtered.length===0&&<div style={{ textAlign:"center",color:"#94a3b8",padding:24,fontSize:11 }}>Sin elementos para los filtros seleccionados.</div>}
+      </div>
+    </div>
+  );
+}
+
 // ── Portal de Cliente (vista pública, solo lectura) ────────────────────────────
 function ClientePortal({ token }) {
   const [obra, setObra] = useState(null);
@@ -641,11 +751,7 @@ function ClientePortal({ token }) {
     return {semana:p.semana,acum,real:Object.keys(weeklyMap).some(w=>w<=p.semana)?realAcumSemana:null,realSemana:weeklyMap[p.semana]??null};
   });
 
-  // Mounted elements list
-  const mountedElements = elements.filter(e=>elMatchesKeys(e,montadosPos))
-    .sort((a,b)=>(a.torre+a.piso+a.pos).localeCompare(b.torre+b.piso+b.pos));
-  const receivedOnlyElements = elements.filter(e=>elMatchesKeys(e,recibidosPos)&&!elMatchesKeys(e,montadosPos))
-    .sort((a,b)=>(a.torre+a.piso+a.pos).localeCompare(b.torre+b.piso+b.pos));
+
 
   const kpiStyle = { background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:"16px 20px",textAlign:"center",flex:1 };
 
@@ -761,46 +867,83 @@ function ClientePortal({ token }) {
           </div>
         )}
 
-        {/* Elementos montados */}
-        {mountedElements.length>0&&(
-          <div style={{ background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:"20px",marginBottom:20 }}>
-            <div style={{ fontSize:9,color:"#d97706",letterSpacing:3,marginBottom:16 }}>ELEMENTOS MONTADOS ({mountedElements.length})</div>
-            <div style={{ overflowX:"auto" }}>
-              <table style={{ width:"100%",borderCollapse:"collapse",fontSize:11 }}>
-                <thead><tr style={{ background:"#f8fafc" }}>
-                  <th style={{ padding:"6px 10px",textAlign:"left",color:"#64748b",fontSize:9,borderBottom:"1px solid #e2e8f0" }}>TORRE</th>
-                  <th style={{ padding:"6px 10px",textAlign:"left",color:"#64748b",fontSize:9,borderBottom:"1px solid #e2e8f0" }}>PISO</th>
-                  <th style={{ padding:"6px 10px",textAlign:"left",color:"#64748b",fontSize:9,borderBottom:"1px solid #e2e8f0" }}>TIPO</th>
-                  <th style={{ padding:"6px 10px",textAlign:"left",color:"#64748b",fontSize:9,borderBottom:"1px solid #e2e8f0" }}>POSICIÓN</th>
-                  <th style={{ padding:"6px 10px",textAlign:"right",color:"#64748b",fontSize:9,borderBottom:"1px solid #e2e8f0" }}>ÁREA m²</th>
-                  <th style={{ padding:"6px 10px",textAlign:"center",color:"#64748b",fontSize:9,borderBottom:"1px solid #e2e8f0" }}>ESTADO</th>
-                </tr></thead>
-                <tbody>
-                  {mountedElements.map(el=>(
-                    <tr key={elKeyOf(el)} style={{ borderBottom:"1px solid #f8fafc" }}>
-                      <td style={{ padding:"5px 10px",color:"#1e293b" }}>{el.torre}</td>
-                      <td style={{ padding:"5px 10px",color:"#475569" }}>{el.piso}</td>
-                      <td style={{ padding:"5px 10px",color:TIPOS_MD.includes(el.tipo)?"#16a34a":"#2563eb",fontWeight:"bold" }}>{el.tipo}</td>
-                      <td style={{ padding:"5px 10px",color:"#475569" }}>{el.pos}</td>
-                      <td style={{ padding:"5px 10px",textAlign:"right",color:"#475569" }}>{fmt2(el.area)}</td>
-                      <td style={{ padding:"5px 10px",textAlign:"center" }}><span style={{ background:"#dcfce7",color:"#16a34a",fontSize:9,padding:"2px 8px",borderRadius:10,fontWeight:"bold" }}>🔧 MONTADO</span></td>
+        {/* Tabla resumen semanal */}
+        {(() => {
+          // Build weekly map: despachado and montado per week
+          const weekMapM = {}, weekMapR = {};
+          dailyStats.forEach(d=>{
+            const w = getWeekNumber(d.date);
+            weekMapM[w] = (weekMapM[w]||0) + d.areaTotal;
+            weekMapR[w] = (weekMapR[w]||0) + d.areaRecibida;
+          });
+          const allWeeks = [...new Set([...Object.keys(weekMapM),...Object.keys(weekMapR)])].sort();
+          if(allWeeks.length===0) return null;
+
+          // Helper: get Monday date of ISO week from "WW.YYYY" string
+          function weekToDate(semana) {
+            const [wNum,wYear] = semana.split('.').map(Number);
+            const jan4 = new Date(wYear,0,4);
+            const dow = jan4.getDay()||7;
+            const week1Mon = new Date(jan4.getTime()-(dow-1)*86400000);
+            const monday = new Date(week1Mon.getTime()+(wNum-1)*7*86400000+86400000);
+            return `${String(monday.getDate()).padStart(2,'0')}/${String(monday.getMonth()+1).padStart(2,'0')}/${monday.getFullYear()}`;
+          }
+
+          let acumM = 0, acumR = 0;
+          const rows = allWeeks.map(w=>{
+            const m = weekMapM[w]||0;
+            const r = weekMapR[w]||0;
+            acumM += m; acumR += r;
+            return { week:w, fecha:weekToDate(w), despachado:r, montado:m, acumD:acumR, acumM };
+          });
+
+          const thStyle = { padding:"7px 10px",textAlign:"right",color:"#64748b",fontSize:9,borderBottom:"1px solid #e2e8f0",whiteSpace:"nowrap" };
+          const tdStyle = { padding:"6px 10px",textAlign:"right",fontSize:10,color:"#475569" };
+
+          return (
+            <div style={{ background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:"20px",marginBottom:20 }}>
+              <div style={{ fontSize:9,color:"#d97706",letterSpacing:3,marginBottom:16 }}>RESUMEN SEMANAL DE AVANCE</div>
+              <div style={{ overflowX:"auto" }}>
+                <table style={{ width:"100%",borderCollapse:"collapse",fontSize:10 }}>
+                  <thead>
+                    <tr style={{ background:"#f8fafc" }}>
+                      <th style={{ ...thStyle,textAlign:"left" }}>SEMANA</th>
+                      <th style={{ ...thStyle,color:"#2563eb" }}>m² DESPACHADOS</th>
+                      <th style={{ ...thStyle,color:"#16a34a" }}>m² MONTADOS</th>
+                      <th style={{ ...thStyle,color:"#2563eb",background:"#eff6ff" }}>ACUM. DESPACHO</th>
+                      <th style={{ ...thStyle,color:"#16a34a",background:"#f0fdf4" }}>ACUM. MONTAJE</th>
                     </tr>
-                  ))}
-                  {receivedOnlyElements.map(el=>(
-                    <tr key={elKeyOf(el)} style={{ borderBottom:"1px solid #f8fafc" }}>
-                      <td style={{ padding:"5px 10px",color:"#1e293b" }}>{el.torre}</td>
-                      <td style={{ padding:"5px 10px",color:"#475569" }}>{el.piso}</td>
-                      <td style={{ padding:"5px 10px",color:TIPOS_MD.includes(el.tipo)?"#16a34a":"#2563eb",fontWeight:"bold" }}>{el.tipo}</td>
-                      <td style={{ padding:"5px 10px",color:"#475569" }}>{el.pos}</td>
-                      <td style={{ padding:"5px 10px",textAlign:"right",color:"#475569" }}>{fmt2(el.area)}</td>
-                      <td style={{ padding:"5px 10px",textAlign:"center" }}><span style={{ background:"#dbeafe",color:"#2563eb",fontSize:9,padding:"2px 8px",borderRadius:10,fontWeight:"bold" }}>📦 EN OBRA</span></td>
+                  </thead>
+                  <tbody>
+                    {rows.map(r=>(
+                      <tr key={r.week} style={{ borderBottom:"1px solid #f8fafc" }}>
+                        <td style={{ padding:"6px 10px",color:"#1e293b",fontWeight:"bold",whiteSpace:"nowrap" }}>
+                          Semana {r.week.split('.')[0]} <span style={{ color:"#94a3b8",fontWeight:"normal",fontSize:9 }}>({r.fecha})</span>
+                        </td>
+                        <td style={{ ...tdStyle,color:"#2563eb" }}>{r.despachado>0?fmt2(r.despachado):"—"}</td>
+                        <td style={{ ...tdStyle,color:"#16a34a",fontWeight:"bold" }}>{r.montado>0?fmt2(r.montado):"—"}</td>
+                        <td style={{ ...tdStyle,color:"#2563eb",background:"#eff6ff" }}>{fmt2(r.acumD)}</td>
+                        <td style={{ ...tdStyle,color:"#16a34a",background:"#f0fdf4",fontWeight:"bold" }}>{fmt2(r.acumM)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr style={{ background:"#f1f5f9",fontWeight:"bold",borderTop:"2px solid #cbd5e1" }}>
+                      <td style={{ padding:"7px 10px",color:"#d97706",fontSize:10 }}>TOTAL</td>
+                      <td style={{ ...tdStyle,color:"#2563eb" }}>{fmt2(rows.reduce((s,r)=>s+r.despachado,0))}</td>
+                      <td style={{ ...tdStyle,color:"#16a34a" }}>{fmt2(rows.reduce((s,r)=>s+r.montado,0))}</td>
+                      <td style={{ ...tdStyle,background:"#eff6ff",color:"#2563eb" }}>{fmt2(rows[rows.length-1]?.acumD||0)}</td>
+                      <td style={{ ...tdStyle,background:"#f0fdf4",color:"#16a34a" }}>{fmt2(rows[rows.length-1]?.acumM||0)}</td>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </tfoot>
+                </table>
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
+
+        {/* Listado completo de elementos con filtros */}
+        <ClienteElementosTable elements={elements} dailyStats={dailyStats} montadosPos={montadosPos} recibidosPos={recibidosPos}/>
 
         <div style={{ textAlign:"center",color:"#cbd5e1",fontSize:9,marginTop:24 }}>
           Portal de avance · Baumax SPA · Control de Montaje · {lastUpdate ? `Actualizado al ${lastUpdate}` : ""}
@@ -947,6 +1090,7 @@ function SelectScreen({ obras, onSelectObra, onAdminClick, onRefresh }) {
 function AdminPanel({ obras, onBack, onObraCreated, setError, onViewObra }) {
   const [tab, setTab] = useState("resumen");
   const [newObra, setNewObra] = useState({ nombre:"", ubicacion:"", fecha_inicio:TODAY });
+  const [editingObra, setEditingObra] = useState(null); // {id, nombre, ubicacion, fecha_inicio}
   const [pendingRegs, setPendingRegs] = useState([]);
   const [usuarios, setUsuarios] = useState([]);
   const [newUser, setNewUser] = useState({ nombre:"", mail:"", rut:"" });
@@ -1168,6 +1312,15 @@ function AdminPanel({ obras, onBack, onObraCreated, setError, onViewObra }) {
     setCreando(false);
   }
 
+  async function guardarEdicionObra() {
+    if(!editingObra?.nombre) return;
+    try {
+      await sbFetch(`obras?id=eq.${editingObra.id}`,{method:"PATCH",body:JSON.stringify({nombre:editingObra.nombre,ubicacion:editingObra.ubicacion,fecha_inicio:editingObra.fecha_inicio})});
+      setEditingObra(null);
+      onObraCreated();
+    } catch(e){ setError("Error: "+e.message); }
+  }
+
   async function cerrarObra(obra) {
     if(!window.confirm(`¿Cerrar la obra "${obra.nombre}"? Ya no se podrán hacer modificaciones.`)) return;
     try {
@@ -1189,17 +1342,8 @@ function AdminPanel({ obras, onBack, onObraCreated, setError, onViewObra }) {
       const existing = await sbFetch(`obra_tokens?obra_id=eq.${obra.id}&select=token,id`);
       let token;
       if(existing.length>0){
-        const accion = window.confirm(
-          `Esta obra ya tiene un link activo.\n\nOK → Copiar el link existente\nCancelar → Generar un link NUEVO (invalida el anterior)`
-        );
-        if(accion){
-          token = existing[0].token;
-        } else {
-          // Revoke old and create new
-          await sbFetch(`obra_tokens?id=eq.${existing[0].id}`,{method:"DELETE",headers:{"Prefer":"return=minimal"}});
-          const created = await sbFetch("obra_tokens",{method:"POST",body:JSON.stringify({obra_id:obra.id})});
-          token = created[0]?.token;
-        }
+        // Always reuse existing token — same link for the duration of the obra
+        token = existing[0].token;
       } else {
         const created = await sbFetch("obra_tokens",{method:"POST",body:JSON.stringify({obra_id:obra.id})});
         token = created[0]?.token;
@@ -1208,6 +1352,14 @@ function AdminPanel({ obras, onBack, onObraCreated, setError, onViewObra }) {
       const url = `${window.location.origin}/cliente/${token}`;
       await navigator.clipboard.writeText(url);
       alert(`¡Link copiado al portapapeles!\n\n${url}\n\nCompartilo con tu cliente.`);
+    } catch(e){ setError("Error: "+e.message); }
+  }
+
+  async function revocarLinkCliente(obra) {
+    if(!window.confirm(`¿Invalidar el link actual de "${obra.nombre}"? El cliente ya no podrá acceder con ese link y tendrás que generar uno nuevo.`)) return;
+    try {
+      await sbFetch(`obra_tokens?obra_id=eq.${obra.id}`,{method:"DELETE",headers:{"Prefer":"return=minimal"}});
+      alert("Link invalidado. Usá 🔗 Link cliente para generar uno nuevo.");
     } catch(e){ setError("Error: "+e.message); }
   }
 
@@ -1421,10 +1573,12 @@ function AdminPanel({ obras, onBack, onObraCreated, setError, onViewObra }) {
                     <div style={{ color:"#94a3b8",fontSize:10 }}>{o.ubicacion} · {o.fecha_inicio}</div>
                   </div>
                   <div style={{ display:"flex",gap:8,alignItems:"center" }}>
+                    <button onClick={()=>setEditingObra({id:o.id,nombre:o.nombre,ubicacion:o.ubicacion||"",fecha_inicio:o.fecha_inicio||""})} style={{ background:"#f1f5f9",color:"#475569",border:"1px solid #cbd5e1",borderRadius:6,padding:"6px 12px",cursor:"pointer",fontFamily:"'DM Mono',monospace",fontSize:10 }}>✎ Editar</button>
                     <button onClick={()=>toggleListadoEstado(o)} style={{ background:"#f1f5f9",color:"#475569",border:"1px solid #cbd5e1",borderRadius:6,padding:"6px 12px",cursor:"pointer",fontFamily:"'DM Mono',monospace",fontSize:10 }}>
                       Marcar como {o.listado_estado==="definitivo"?"Preliminar":"Definitivo"}
                     </button>
                     <button onClick={()=>generarLinkCliente(o)} style={{ background:"#eff6ff",color:"#2563eb",border:"1px solid #bfdbfe",borderRadius:6,padding:"6px 12px",cursor:"pointer",fontFamily:"'DM Mono',monospace",fontSize:10 }}>🔗 Link cliente</button>
+                    <button onClick={()=>revocarLinkCliente(o)} style={{ background:"#fff",color:"#94a3b8",border:"1px solid #e2e8f0",borderRadius:6,padding:"6px 12px",cursor:"pointer",fontFamily:"'DM Mono',monospace",fontSize:10 }}>✕ Revocar link</button>
                     <button onClick={()=>onViewObra(o)} style={{ ...btnSecondary,padding:"6px 12px",fontSize:10 }}>Ver →</button>
                     <button onClick={()=>cerrarObra(o)} style={{ background:"#fee2e2",color:"#dc2626",border:"1px solid #fecaca",borderRadius:6,padding:"6px 12px",cursor:"pointer",fontFamily:"'DM Mono',monospace",fontSize:10 }}>✕ Cerrar Obra</button>
                   </div>
@@ -1606,6 +1760,25 @@ function AdminPanel({ obras, onBack, onObraCreated, setError, onViewObra }) {
           </Panel>
         )}
       </div>
+
+      {/* Modal edición de obra */}
+      {editingObra&&(
+        <div style={{ position:"fixed",inset:0,background:"rgba(15,23,42,0.6)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1000,padding:16 }}>
+          <div style={{ background:"#fff",borderRadius:12,padding:24,width:"100%",maxWidth:420 }}>
+            <div style={{ fontFamily:"'Archivo Black',sans-serif",fontSize:16,color:"#1e293b",marginBottom:16 }}>✎ Editar obra</div>
+            <Label>Nombre</Label>
+            <input value={editingObra.nombre} onChange={e=>setEditingObra(o=>({...o,nombre:e.target.value}))} style={{ ...inp,marginBottom:10 }}/>
+            <Label>Ubicación</Label>
+            <input value={editingObra.ubicacion} onChange={e=>setEditingObra(o=>({...o,ubicacion:e.target.value}))} style={{ ...inp,marginBottom:10 }}/>
+            <Label>Fecha inicio</Label>
+            <input type="date" value={editingObra.fecha_inicio} onChange={e=>setEditingObra(o=>({...o,fecha_inicio:e.target.value}))} style={{ ...inp,marginBottom:18 }}/>
+            <div style={{ display:"flex",gap:8 }}>
+              <button onClick={()=>setEditingObra(null)} style={{ ...btnSecondary,flex:1 }}>Cancelar</button>
+              <button onClick={guardarEdicionObra} style={{ ...btnPrimary,flex:1 }}>Guardar cambios</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
