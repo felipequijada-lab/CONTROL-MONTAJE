@@ -616,7 +616,7 @@ function ClienteElementosTable({ elements, dailyStats, montadosPos, recibidosPos
   };
 
   return (
-    <div style={{ background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:"20px",marginBottom:20 }}>
+    <div className="cp-section" style={{ background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:"18px 16px",marginBottom:16 }}>
       <div style={{ fontSize:9,color:"#d97706",letterSpacing:3,marginBottom:14 }}>LISTADO DE ELEMENTOS ({filtered.length} de {elements.length})</div>
 
       {/* Filters */}
@@ -753,54 +753,58 @@ function ClientePortal({ token }) {
 
 
 
-  const kpiStyle = { background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:"16px 20px",textAlign:"center",flex:1 };
-
   return (
     <div style={{ minHeight:"100vh",background:"#f1f5f9",fontFamily:"'DM Mono','Courier New',monospace" }}>
       <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Archivo+Black&display=swap" rel="stylesheet"/>
+      <style>{`
+        @media(max-width:600px){
+          .cp-header{padding:12px 14px!important;flex-direction:column!important;align-items:flex-start!important;gap:4px!important;}
+          .cp-obra-info{text-align:left!important;}
+          .cp-kpis{grid-template-columns:1fr 1fr!important;gap:8px!important;}
+          .cp-pad{padding:10px 12px!important;}
+          .cp-section{padding:12px 10px!important;margin-bottom:12px!important;}
+          .cp-title{font-size:17px!important;}
+          table{font-size:10px!important;}
+          th,td{padding:5px 6px!important;font-size:9px!important;}
+          canvas{height:200px!important;}
+        }
+      `}</style>
 
       {/* Header */}
-      <div style={{ background:"#fff",borderBottom:"1px solid #e2e8f0",padding:"16px 32px",display:"flex",justifyContent:"space-between",alignItems:"center" }}>
+      <div className="cp-header" style={{ background:"#fff",borderBottom:"1px solid #e2e8f0",padding:"14px 24px",display:"flex",justifyContent:"space-between",alignItems:"center" }}>
         <div>
-          <div style={{ fontFamily:"'Archivo Black',sans-serif",fontSize:22,color:"#d97706" }}>◈ CONTROL DE MONTAJE</div>
-          <div style={{ fontSize:10,color:"#94a3b8",letterSpacing:3,marginTop:2 }}>BAUMAX SPA · PORTAL DE AVANCE</div>
+          <div className="cp-title" style={{ fontFamily:"'Archivo Black',sans-serif",fontSize:20,color:"#d97706" }}>◈ CONTROL DE MONTAJE</div>
+          <div style={{ fontSize:9,color:"#94a3b8",letterSpacing:2,marginTop:2 }}>BAUMAX SPA · PORTAL DE AVANCE</div>
         </div>
-        <div style={{ textAlign:"right" }}>
-          <div style={{ fontFamily:"'Archivo Black',sans-serif",fontSize:16,color:"#1e293b" }}>{obra.nombre}</div>
-          <div style={{ fontSize:10,color:"#94a3b8",marginTop:2 }}>{obra.ubicacion}</div>
-          {lastUpdate&&<div style={{ fontSize:9,color:"#cbd5e1",marginTop:4 }}>Actualizado al {lastUpdate}</div>}
+        <div className="cp-obra-info" style={{ textAlign:"right" }}>
+          <div style={{ fontFamily:"'Archivo Black',sans-serif",fontSize:14,color:"#1e293b" }}>{obra.nombre}</div>
+          {obra.ubicacion&&<div style={{ fontSize:10,color:"#94a3b8",marginTop:2 }}>{obra.ubicacion}</div>}
+          {lastUpdate&&<div style={{ fontSize:9,color:"#cbd5e1",marginTop:3 }}>Actualizado al {lastUpdate}</div>}
         </div>
       </div>
 
       {obra.listado_estado!=="definitivo"&&(
-        <div style={{ background:"#fff7ed",borderBottom:"1px solid #fed7aa",padding:"8px 32px",fontSize:10,color:"#9a3412" }}>
-          ⚠ Los datos de avance son sobre un listado de elementos <b>preliminar</b> y pueden ajustarse.
+        <div style={{ background:"#fff7ed",borderBottom:"1px solid #fed7aa",padding:"8px 16px",fontSize:10,color:"#9a3412" }}>
+          ⚠ Listado de elementos <b>preliminar</b> — los datos pueden ajustarse.
         </div>
       )}
 
-      <div style={{ maxWidth:1100,margin:"0 auto",padding:"28px 24px" }}>
+      <div className="cp-pad" style={{ maxWidth:1100,margin:"0 auto",padding:"20px 16px" }}>
 
-        {/* KPIs */}
-        <div style={{ display:"flex",gap:12,marginBottom:24,flexWrap:"wrap" }}>
-          <div style={kpiStyle}>
-            <div style={{ fontSize:9,color:"#94a3b8",letterSpacing:2,marginBottom:8 }}>m² TOTAL OBRA</div>
-            <div style={{ fontSize:26,fontWeight:"bold",color:"#1e293b",fontFamily:"'Archivo Black',sans-serif" }}>{fmt2(totalArea)}</div>
-          </div>
-          <div style={kpiStyle}>
-            <div style={{ fontSize:9,color:"#94a3b8",letterSpacing:2,marginBottom:8 }}>m² DESPACHADOS</div>
-            <div style={{ fontSize:26,fontWeight:"bold",color:"#2563eb",fontFamily:"'Archivo Black',sans-serif" }}>{fmt2(receivedArea)}</div>
-            <div style={{ fontSize:10,color:"#94a3b8",marginTop:4 }}>{fmtPct(pctReceived)} del total</div>
-          </div>
-          <div style={kpiStyle}>
-            <div style={{ fontSize:9,color:"#94a3b8",letterSpacing:2,marginBottom:8 }}>m² MONTADOS</div>
-            <div style={{ fontSize:26,fontWeight:"bold",color:"#16a34a",fontFamily:"'Archivo Black',sans-serif" }}>{fmt2(mountedArea)}</div>
-            <div style={{ fontSize:10,color:"#94a3b8",marginTop:4 }}>{fmtPct(pctMounted)} del total</div>
-          </div>
-          <div style={kpiStyle}>
-            <div style={{ fontSize:9,color:"#94a3b8",letterSpacing:2,marginBottom:8 }}>m² STOCK EN OBRA</div>
-            <div style={{ fontSize:26,fontWeight:"bold",color:"#f59e0b",fontFamily:"'Archivo Black',sans-serif" }}>{fmt2(stockArea)}</div>
-            <div style={{ fontSize:10,color:"#94a3b8",marginTop:4 }}>Recibido, pendiente de montaje</div>
-          </div>
+        {/* KPIs — 2 columnas en móvil, 4 en desktop */}
+        <div className="cp-kpis" style={{ display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:20 }}>
+          {[
+            {label:"m² TOTAL OBRA",   value:fmt2(totalArea),   color:"#1e293b", sub:null},
+            {label:"m² DESPACHADOS",  value:fmt2(receivedArea),color:"#2563eb", sub:fmtPct(pctReceived)+" del total"},
+            {label:"m² MONTADOS",     value:fmt2(mountedArea), color:"#16a34a", sub:fmtPct(pctMounted)+" del total"},
+            {label:"m² STOCK EN OBRA",value:fmt2(stockArea),   color:"#f59e0b", sub:"Recibido, sin montar"},
+          ].map(k=>(
+            <div key={k.label} style={{ background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:"14px 12px",textAlign:"center" }}>
+              <div style={{ fontSize:8,color:"#94a3b8",letterSpacing:1,marginBottom:6 }}>{k.label}</div>
+              <div style={{ fontSize:22,fontWeight:"bold",color:k.color,fontFamily:"'Archivo Black',sans-serif",lineHeight:1 }}>{k.value}</div>
+              {k.sub&&<div style={{ fontSize:9,color:"#94a3b8",marginTop:4 }}>{k.sub}</div>}
+            </div>
+          ))}
         </div>
 
         {/* Últimos 10 días con actividad */}
@@ -812,8 +816,8 @@ function ClientePortal({ token }) {
             .reverse();
           if(ultimos10.length===0) return null;
           return (
-            <div style={{ background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:"20px",marginBottom:20 }}>
-              <div style={{ fontSize:9,color:"#d97706",letterSpacing:3,marginBottom:16 }}>ACTIVIDAD RECIENTE — ÚLTIMOS {ultimos10.length} DÍAS</div>
+            <div className="cp-section" style={{ background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:"18px 16px",marginBottom:16 }}>
+              <div style={{ fontSize:9,color:"#d97706",letterSpacing:2,marginBottom:14,fontWeight:"bold" }}>ACTIVIDAD RECIENTE — ÚLTIMOS {ultimos10.length} DÍAS</div>
               <table style={{ width:"100%",borderCollapse:"collapse",fontSize:11 }}>
                 <thead><tr style={{ background:"#f8fafc" }}>
                   <th style={{ padding:"6px 10px",textAlign:"left",color:"#64748b",fontSize:9,borderBottom:"1px solid #e2e8f0" }}>FECHA</th>
@@ -854,15 +858,15 @@ function ClientePortal({ token }) {
         })()}
 
         {/* Plano de avance */}
-        <div style={{ background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:"20px",marginBottom:20 }}>
-          <div style={{ fontSize:9,color:"#d97706",letterSpacing:3,marginBottom:16 }}>PLANO DE AVANCE — TORRES Y PISOS</div>
+        <div className="cp-section" style={{ background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:"18px 16px",marginBottom:16 }}>
+          <div style={{ fontSize:9,color:"#d97706",letterSpacing:2,marginBottom:14,fontWeight:"bold" }}>PLANO DE AVANCE — TORRES Y PISOS</div>
           <PlanoAvance elements={elements} montadosPos={montadosPos}/>
         </div>
 
         {/* Curva S */}
         {programaAcum.length>0&&(
-          <div style={{ background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:"20px",marginBottom:20 }}>
-            <div style={{ fontSize:9,color:"#d97706",letterSpacing:3,marginBottom:16 }}>CURVA S — AVANCE PROGRAMADO vs REAL</div>
+          <div className="cp-section" style={{ background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:"18px 16px",marginBottom:16 }}>
+            <div style={{ fontSize:9,color:"#d97706",letterSpacing:2,marginBottom:14,fontWeight:"bold" }}>CURVA S — AVANCE PROGRAMADO vs REAL</div>
             <CurvaS data={programaAcum} obraNombre={obra.nombre}/>
           </div>
         )}
@@ -901,24 +905,24 @@ function ClientePortal({ token }) {
           const tdStyle = { padding:"6px 10px",textAlign:"right",fontSize:10,color:"#475569" };
 
           return (
-            <div style={{ background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:"20px",marginBottom:20 }}>
-              <div style={{ fontSize:9,color:"#d97706",letterSpacing:3,marginBottom:16 }}>RESUMEN SEMANAL DE AVANCE</div>
+            <div className="cp-section" style={{ background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:"18px 16px",marginBottom:16 }}>
+              <div style={{ fontSize:9,color:"#d97706",letterSpacing:2,marginBottom:14,fontWeight:"bold" }}>RESUMEN SEMANAL DE AVANCE</div>
               <div style={{ overflowX:"auto" }}>
                 <table style={{ width:"100%",borderCollapse:"collapse",fontSize:10 }}>
                   <thead>
                     <tr style={{ background:"#f8fafc" }}>
                       <th style={{ ...thStyle,textAlign:"left" }}>SEMANA</th>
-                      <th style={{ ...thStyle,color:"#2563eb" }}>m² DESPACHADOS</th>
-                      <th style={{ ...thStyle,color:"#16a34a" }}>m² MONTADOS</th>
-                      <th style={{ ...thStyle,color:"#2563eb",background:"#eff6ff" }}>ACUM. DESPACHO</th>
-                      <th style={{ ...thStyle,color:"#16a34a",background:"#f0fdf4" }}>ACUM. MONTAJE</th>
+                      <th style={{ ...thStyle,color:"#2563eb" }}>m² DESP.</th>
+                      <th style={{ ...thStyle,color:"#16a34a" }}>m² MONT.</th>
+                      <th style={{ ...thStyle,color:"#2563eb",background:"#eff6ff" }}>ACUM. DESP.</th>
+                      <th style={{ ...thStyle,color:"#16a34a",background:"#f0fdf4" }}>ACUM. MONT.</th>
                     </tr>
                   </thead>
                   <tbody>
                     {rows.map(r=>(
                       <tr key={r.week} style={{ borderBottom:"1px solid #f8fafc" }}>
-                        <td style={{ padding:"6px 10px",color:"#1e293b",fontWeight:"bold",whiteSpace:"nowrap" }}>
-                          Semana {r.week.split('.')[0]} <span style={{ color:"#94a3b8",fontWeight:"normal",fontSize:9 }}>({r.fecha})</span>
+                        <td style={{ padding:"6px 8px",color:"#1e293b",fontWeight:"bold",fontSize:10,whiteSpace:"nowrap" }}>
+                          S{r.week.split('.')[0]} <span style={{ color:"#94a3b8",fontWeight:"normal",fontSize:9 }}>({r.fecha})</span>
                         </td>
                         <td style={{ ...tdStyle,color:"#2563eb" }}>{r.despachado>0?fmt2(r.despachado):"—"}</td>
                         <td style={{ ...tdStyle,color:"#16a34a",fontWeight:"bold" }}>{r.montado>0?fmt2(r.montado):"—"}</td>
@@ -929,7 +933,7 @@ function ClientePortal({ token }) {
                   </tbody>
                   <tfoot>
                     <tr style={{ background:"#f1f5f9",fontWeight:"bold",borderTop:"2px solid #cbd5e1" }}>
-                      <td style={{ padding:"7px 10px",color:"#d97706",fontSize:10 }}>TOTAL</td>
+                      <td style={{ padding:"6px 8px",color:"#d97706",fontSize:10 }}>TOTAL</td>
                       <td style={{ ...tdStyle,color:"#2563eb" }}>{fmt2(rows.reduce((s,r)=>s+r.despachado,0))}</td>
                       <td style={{ ...tdStyle,color:"#16a34a" }}>{fmt2(rows.reduce((s,r)=>s+r.montado,0))}</td>
                       <td style={{ ...tdStyle,background:"#eff6ff",color:"#2563eb" }}>{fmt2(rows[rows.length-1]?.acumD||0)}</td>
