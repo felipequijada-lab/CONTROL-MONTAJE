@@ -766,7 +766,7 @@ function ClientePortal({ token }) {
           .cp-title{font-size:17px!important;}
           table{font-size:10px!important;}
           th,td{padding:5px 6px!important;font-size:9px!important;}
-          canvas{height:200px!important;}
+          #curvaSMain{height:260px!important;max-width:100%!important;}
         }
       `}</style>
 
@@ -3185,7 +3185,10 @@ function BarrasSemanales({ dailyStats, elements }) {
 // Extraído como función standalone para reutilizar tanto en el componente visual CurvaS
 // como en la generación de canvas ocultos para PDFs (informe ejecutivo, etc).
 function drawCurvaSOnCanvas(ctx, data, W, H) {
-    const padL=90, padR=70, padT=36, padB=52;
+    // Scale fonts and paddings proportionally for small canvases (mobile)
+    const scale = Math.min(1, W/820);
+    const fs = (n) => Math.max(7, Math.round(n*scale))+'px monospace';
+    const padL=Math.round(90*scale), padR=Math.round(70*scale), padT=Math.round(36*scale), padB=Math.round(52*scale);
     const cW=W-padL-padR, cH=H-padT-padB;
     const n=data.length; if(n===0) return;
 
@@ -3204,7 +3207,7 @@ function drawCurvaSOnCanvas(ctx, data, W, H) {
       const y=padT+cH*(1-i/numTicksAcum);
       ctx.strokeStyle='#e2e8f0'; ctx.lineWidth=1;
       ctx.beginPath(); ctx.moveTo(padL,y); ctx.lineTo(padL+cW,y); ctx.stroke();
-      ctx.fillStyle='#2563eb'; ctx.font='10px monospace'; ctx.textAlign='left';
+      ctx.fillStyle='#2563eb'; ctx.font=fs(10); ctx.textAlign='left';
       ctx.fillText(i*2500,padL+cW+6,y+4);
     }
     // Left axis ticks (500 intervals) — draw line + labels well outside bars
@@ -3218,7 +3221,7 @@ function drawCurvaSOnCanvas(ctx, data, W, H) {
       ctx.strokeStyle='#cbd5e1'; ctx.lineWidth=1;
       ctx.beginPath(); ctx.moveTo(padL-4,y); ctx.lineTo(padL,y); ctx.stroke();
       // Label
-      ctx.fillStyle='#475569'; ctx.font='10px monospace'; ctx.textAlign='right';
+      ctx.fillStyle='#475569'; ctx.font=fs(10); ctx.textAlign='right';
       ctx.fillText(i*500, padL-8, y+4);
     }
 
@@ -3239,9 +3242,9 @@ function drawCurvaSOnCanvas(ctx, data, W, H) {
       const dd=String(weekStart.getDate()).padStart(2,'0');
       const meses=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
       const mmNombre=meses[weekStart.getMonth()];
-      ctx.fillStyle='#475569'; ctx.font='10px monospace'; ctx.textAlign='center';
+      ctx.fillStyle='#475569'; ctx.font=fs(10); ctx.textAlign='center';
       ctx.fillText(dd+' '+mmNombre,x,padT+cH+16);
-      ctx.fillStyle='#94a3b8'; ctx.font='9px monospace';
+      ctx.fillStyle='#94a3b8'; ctx.font=fs(9);
       ctx.fillText('S'+wNum,x,padT+cH+28);
     });
 
@@ -3275,13 +3278,13 @@ function drawCurvaSOnCanvas(ctx, data, W, H) {
       if(weeklyProg[i]>0){
         const h=(weeklyProg[i]/maxWeek)*cH;
         const x=cx - bGap/2 - bW;
-        ctx.fillStyle='rgba(120,53,15,0.8)'; ctx.font='8px monospace'; ctx.textAlign='center';
+        ctx.fillStyle='rgba(120,53,15,0.8)'; ctx.font=fs(8); ctx.textAlign='center';
         ctx.fillText(Math.round(weeklyProg[i]), x+bW/2, padT+cH-h+10);
       }
       if(weeklyReal[i]!==null&&weeklyReal[i]>0){
         const h=(weeklyReal[i]/maxWeek)*cH;
         const x=cx + bGap/2;
-        ctx.fillStyle='rgba(20,83,45,0.9)'; ctx.font='8px monospace'; ctx.textAlign='center';
+        ctx.fillStyle='rgba(20,83,45,0.9)'; ctx.font=fs(8); ctx.textAlign='center';
         ctx.fillText(Math.round(weeklyReal[i]), x+bW/2, padT+cH-h+10);
       }
     });
@@ -3305,10 +3308,10 @@ function drawCurvaSOnCanvas(ctx, data, W, H) {
       ctx.stroke();
       realPts.forEach(d=>{
         const i=data.indexOf(d),x=xPos(i),y=padT+cH*(1-d.real/maxAcum);
-        ctx.fillStyle='#16a34a'; ctx.beginPath(); ctx.arc(x,y,5,0,Math.PI*2); ctx.fill();
-        ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(x,y,2.5,0,Math.PI*2); ctx.fill();
+        ctx.fillStyle='#16a34a'; ctx.beginPath(); ctx.arc(x,y,Math.max(3,5*scale),0,Math.PI*2); ctx.fill();
+        ctx.fillStyle='#fff'; ctx.beginPath(); ctx.arc(x,y,Math.max(1.5,2.5*scale),0,Math.PI*2); ctx.fill();
         const dev=d.real-d.acum;
-        ctx.fillStyle=dev>=0?'#16a34a':'#dc2626'; ctx.font='bold 9px monospace'; ctx.textAlign='center';
+        ctx.fillStyle=dev>=0?'#16a34a':'#dc2626'; ctx.font='bold '+fs(9); ctx.textAlign='center';
         ctx.fillText((dev>=0?'+':'')+Math.round(dev),x,y-11);
       });
     }
@@ -3316,7 +3319,7 @@ function drawCurvaSOnCanvas(ctx, data, W, H) {
     // Legend
     const ly=16;
     ctx.fillStyle='rgba(251,146,60,0.7)'; ctx.fillRect(padL,ly,11,9);
-    ctx.fillStyle='#64748b'; ctx.font='10px monospace'; ctx.textAlign='left'; ctx.fillText('Prog. sem.',padL+15,ly+8);
+    ctx.fillStyle='#64748b'; ctx.font=fs(10); ctx.textAlign='left'; ctx.fillText('Prog. sem.',padL+15,ly+8);
     ctx.fillStyle='rgba(74,222,128,0.85)'; ctx.fillRect(padL+88,ly,11,9);
     ctx.fillStyle='#64748b'; ctx.fillText('Real sem.',padL+103,ly+8);
     ctx.strokeStyle='#2563eb'; ctx.lineWidth=2; ctx.setLineDash([5,3]);
@@ -3327,12 +3330,12 @@ function drawCurvaSOnCanvas(ctx, data, W, H) {
     ctx.fillStyle='#16a34a'; ctx.fillText('Acum. real',padL+322,ly+8);
 
     // Axis labels
-    ctx.fillStyle='#64748b'; ctx.font='10px monospace'; ctx.textAlign='center';
+    ctx.fillStyle='#64748b'; ctx.font=fs(10); ctx.textAlign='center';
     ctx.fillText('Semana',padL+cW/2,H-3);
     ctx.save(); ctx.translate(12,padT+cH/2); ctx.rotate(-Math.PI/2);
-    ctx.fillStyle='#475569'; ctx.font='10px monospace'; ctx.fillText('m² semanal',0,0); ctx.restore();
+    ctx.fillStyle='#475569'; ctx.font=fs(10); ctx.fillText('m² semanal',0,0); ctx.restore();
     ctx.save(); ctx.translate(W-10,padT+cH/2); ctx.rotate(Math.PI/2);
-    ctx.fillStyle='#2563eb'; ctx.font='10px monospace'; ctx.fillText('m² acumulado',0,0); ctx.restore();
+    ctx.fillStyle='#2563eb'; ctx.font=fs(10); ctx.fillText('m² acumulado',0,0); ctx.restore();
 }
 
 function CurvaS({ data, obraNombre }) {
