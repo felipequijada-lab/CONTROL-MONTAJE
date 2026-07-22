@@ -4,11 +4,9 @@ import * as XLSX from "xlsx";
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "https://uxgkiuhcqcvcwkvtjqvo.supabase.co";
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_KEY || "sb_publishable_CSpI4hVvQmUWai7oQcPmuQ_mZe3EYqA";
 
-// Emails con acceso de administrador — para agregar uno nuevo, añadirlo a esta lista
-const ADMIN_EMAILS = [
-  "felipe.quijada@baumax.cl",
-  "oscar.maldonado@baumax.cl",
-];
+// Admin emails are now managed dynamically from Supabase table admin_emails
+// This fallback is used only if the DB query fails
+const ADMIN_EMAILS_FALLBACK = ["felipe.quijada@baumax.cl","oscar.maldonado@baumax.cl"];
 
 // Emails con acceso de gerente (lectura total, sin edición)
 const GERENTE_EMAILS = [
@@ -1252,9 +1250,16 @@ export default function App() {
           setLoading(false);
           return;
         }
-        const isAdmin = ADMIN_EMAILS.includes(email);
         const isGerente = GERENTE_EMAILS.includes(email);
         const nombre = user.user_metadata?.full_name || email.split("@")[0];
+
+        // Load admin emails from DB dynamically
+        let adminEmailsList = ADMIN_EMAILS_FALLBACK;
+        try {
+          const adminRows = await sbFetch("admin_emails?select=email");
+          if(adminRows.length>0) adminEmailsList = adminRows.map(r=>r.email.toLowerCase());
+        } catch(e){ /* use fallback */ }
+        const isAdmin = adminEmailsList.includes(email);
 
         // Load all obras
         const todasObras = await sbFetch("obras?select=*&order=created_at.desc");
@@ -1388,6 +1393,8 @@ function AdminPanel({ obras, onBack, onObraCreated, setError, onViewObra, curren
   const [editingObra, setEditingObra] = useState(null); // {id, nombre, ubicacion, fecha_inicio}
   const [pendingRegs, setPendingRegs] = useState([]);
   const [usuarios, setUsuarios] = useState([]);
+  const [adminEmails, setAdminEmails] = useState([]);
+  const [newAdminEmail, setNewAdminEmail] = useState("");
   const [newUser, setNewUser] = useState({ nombre:"", mail:"", rut:"" });
   const [editingUser, setEditingUser] = useState(null);
   const [creando, setCreando] = useState(false);
@@ -1458,16 +1465,34 @@ function AdminPanel({ obras, onBack, onObraCreated, setError, onViewObra, curren
 
   async function loadUsuarios() {
     try {
-      const [data, asigs] = await Promise.all([
+      const [data, asigs, adminRows] = await Promise.all([
         sbFetch("usuarios?select=*"),
         sbFetch("usuarios_obras?select=*"),
+        sbFetch("admin_emails?select=*&order=id.asc"),
       ]);
-      // Attach obra assignments to each user
       const withObras = data.map(u=>({
         ...u,
         obras_ids: asigs.filter(a=>String(a.usuario_id)===String(u.id)).map(a=>String(a.obra_id))
       }));
       setUsuarios(withObras);
+      setAdminEmails(adminRows);
+    } catch(e){ setError("Error: "+e.message); }
+  }
+
+  async function agregarAdmin() {
+    if(!newAdminEmail.trim()||!newAdminEmail.includes("@")) return;
+    try {
+      await sbFetch("admin_emails",{method:"POST",body:JSON.stringify({email:newAdminEmail.trim().toLowerCase()})});
+      setNewAdminEmail("");
+      loadUsuarios();
+    } catch(e){ setError("Error: "+e.message); }
+  }
+
+  async function eliminarAdmin(id, email) {
+    if(!window.confirm(`¿Eliminar a ${email} como administrador? Ya no podrá acceder al panel admin.`)) return;
+    try {
+      await sbFetch(`admin_emails?id=eq.${id}`,{method:"DELETE",headers:{"Prefer":"return=minimal"}});
+      loadUsuarios();
     } catch(e){ setError("Error: "+e.message); }
   }
 
@@ -2074,15 +2099,17 @@ function AdminPanel({ obras, onBack, onObraCreated, setError, onViewObra, curren
               ))}
             </Panel>
             <Panel title="ADMINISTRADORES">
-              <div style={{ fontSize:11,color:"#64748b",marginBottom:8 }}>Los administradores ingresan con Google y tienen acceso total a todas las obras.</div>
-              <div style={{ background:"#f8fafc",borderRadius:6,padding:"10px 12px" }}>
-                {ADMIN_EMAILS.map(email=>(
-                  <div key={email} style={{ fontSize:11,color:"#1e293b",padding:"4px 0",borderBottom:"1px solid #f1f5f9" }}>
-                    ◈ {email}
-                  </div>
-                ))}
+              <div style={{ fontSize:11,color:"#64748b",marginBottom:12 }}>Los administradores ingresan con Google y tienen acceso total a todas las obras.</div>
+              {adminEmails.map(a=>(
+                <div key={a.id} style={{ display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:"1px solid #f1f5f9" }}>
+                  <span style={{ fontSize:11,color:"#1e293b" }}>◈ {a.email}</span>
+                  <button onClick={()=>eliminarAdmin(a.id,a.email)} style={{ background:"#fee2e2",color:"#dc2626",border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontFamily:"'DM Mono',monospace",fontSize:10 }}>✕ Eliminar</button>
+                </div>
+              ))}
+              <div style={{ display:"flex",gap:8,marginTop:12 }}>
+                <input value={newAdminEmail} onChange={e=>setNewAdminEmail(e.target.value)} onKeyDown={e=>e.key==="Enter"&&agregarAdmin()} placeholder="nuevo.admin@baumax.cl" style={{ ...inp,flex:1,margin:0 }}/>
+                <button onClick={agregarAdmin} disabled={!newAdminEmail.trim()} style={{ ...btnPrimary,padding:"8px 16px" }}>+ Agregar</button>
               </div>
-              <div style={{ fontSize:10,color:"#94a3b8",marginTop:8 }}>Para agregar admins, edita la constante ADMIN_EMAILS en el código.</div>
             </Panel>
           </div>
         )}
