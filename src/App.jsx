@@ -479,6 +479,91 @@ function generateExcel(weekData, elements, dailyStats, weekLabel) {
 }
 
 // ── Excel Completo ────────────────────────────────────────────────────────────
+function generateReporteGabo(elements, dailyStats, obraName) {
+  const wb = XLSX.utils.book_new();
+
+  // Sheet 1: Listado completo ordenado por Torre → Piso → Tipo → Posición
+  const rows = [
+    [`REPORTE GABO — ${obraName}`],
+    [`Generado: ${new Date().toLocaleDateString('es-CL')}`],
+    [],
+    ["Lote","Torre","Piso","Tipo","Posición","Área m²","Estado","F. Recepción","F. Montaje","Semana Recepción","Semana Montaje"]
+  ];
+
+  const sorted = [...elements].sort((a,b)=>{
+    if(a.torre!==b.torre) return a.torre.localeCompare(b.torre);
+    if(String(a.piso)!==String(b.piso)) return Number(a.piso)-Number(b.piso);
+    if(a.tipo!==b.tipo) return a.tipo.localeCompare(b.tipo);
+    return a.pos.localeCompare(b.pos, undefined, {numeric:true});
+  });
+
+  sorted.forEach(el=>{
+    const logR = dailyStats.find(d=>d.aprobado&&elMatchesArr(el,d.recibidos));
+    const logM = dailyStats.find(d=>d.aprobado&&elMatchesArr(el,d.montados));
+    const estado = logM?"Montado":logR?"Recibido":"Pendiente";
+    rows.push([
+      el.lote||"",
+      el.torre||"",
+      el.piso||"",
+      el.tipo,
+      el.pos,
+      el.area,
+      estado,
+      logR?.date||"",
+      logM?.date||"",
+      logR?.date?getWeekNumber(logR.date):"",
+      logM?.date?getWeekNumber(logM.date):"",
+    ]);
+  });
+
+  // Totals row
+  const totalArea = elements.reduce((s,e)=>s+e.area,0);
+  const montadosArea = elements.filter(e=>dailyStats.some(d=>d.aprobado&&elMatchesArr(e,d.montados))).reduce((s,e)=>s+e.area,0);
+  const recibidosArea = elements.filter(e=>dailyStats.some(d=>d.aprobado&&(elMatchesArr(e,d.recibidos)||elMatchesArr(e,d.montados)))).reduce((s,e)=>s+e.area,0);
+  rows.push([]);
+  rows.push(["TOTAL","","","","",totalArea,"","","","",""]);
+  rows.push(["Recibidos m²","","","","",recibidosArea,"","","","",""]);
+  rows.push(["Montados m²","","","","",montadosArea,"","","","",""]);
+
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+
+  // Column widths
+  ws['!cols'] = [
+    {wch:12},{wch:18},{wch:8},{wch:8},{wch:12},{wch:10},
+    {wch:12},{wch:14},{wch:14},{wch:16},{wch:16}
+  ];
+
+  XLSX.utils.book_append_sheet(wb, ws, "Listado Elementos");
+
+  // Sheet 2: Resumen por Torre y Piso
+  const resRows = [["Torre","Piso","Tipo","Total Elementos","Total m²","Recibidos","m² Recibidos","Montados","m² Montados","% Avance"]];
+  const grupos = {};
+  sorted.forEach(el=>{
+    const k = `${el.torre}||${el.piso}||${el.tipo}`;
+    if(!grupos[k]) grupos[k]={torre:el.torre,piso:el.piso,tipo:el.tipo,elems:[]};
+    grupos[k].elems.push(el);
+  });
+  Object.values(grupos).forEach(g=>{
+    const totalEl = g.elems.length;
+    const totalM2 = g.elems.reduce((s,e)=>s+e.area,0);
+    const recibidos = g.elems.filter(e=>dailyStats.some(d=>d.aprobado&&(elMatchesArr(e,d.recibidos)||elMatchesArr(e,d.montados))));
+    const montados  = g.elems.filter(e=>dailyStats.some(d=>d.aprobado&&elMatchesArr(e,d.montados)));
+    const m2Rec = recibidos.reduce((s,e)=>s+e.area,0);
+    const m2Mon = montados.reduce((s,e)=>s+e.area,0);
+    resRows.push([
+      g.torre, g.piso, g.tipo, totalEl, parseFloat(fmt2(totalM2)),
+      recibidos.length, parseFloat(fmt2(m2Rec)),
+      montados.length, parseFloat(fmt2(m2Mon)),
+      parseFloat(fmtPct(totalM2>0?m2Mon/totalM2*100:0))
+    ]);
+  });
+  const ws2 = XLSX.utils.aoa_to_sheet(resRows);
+  ws2['!cols'] = [{wch:18},{wch:8},{wch:8},{wch:16},{wch:12},{wch:12},{wch:14},{wch:12},{wch:14},{wch:12}];
+  XLSX.utils.book_append_sheet(wb, ws2, "Resumen por Torre-Piso");
+
+  XLSX.writeFile(wb, `reporte_gabo_${obraName.replace(/\s+/g,"_")}_${TODAY}.xlsx`);
+}
+
 function generateFullExcel(elements, dailyStats, weeklyStats, obraName) {
   const wb = XLSX.utils.book_new();
   const semRows=[
@@ -2867,6 +2952,7 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
                   <div style={{ display:"flex",gap:8 }}>
                     <button onClick={()=>generateFullPDF(elements,dailyStats,weeklyStats,programaAcum,obra.nombre)} style={{ ...btnPrimary,background:"#7c3aed" }}>↓ PDF COMPLETO</button>
                     <button onClick={()=>generateFullExcel(elements,dailyStats,weeklyStats,obra.nombre)} style={{ ...btnPrimary,background:"#0891b2" }}>↓ EXCEL COMPLETO</button>
+                    <button onClick={()=>generateReporteGabo(elements,dailyStats,obra.nombre)} style={{ ...btnPrimary,background:"#7c3aed" }}>↓ REPORTE GABO</button>
                   </div>
                 </div>
               </div>
