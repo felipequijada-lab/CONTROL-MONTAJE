@@ -12,6 +12,55 @@
     <link rel="manifest" href="/manifest.json"/>
     <link rel="apple-touch-icon" href="/icon-192.png"/>
     <link rel="icon" type="image/png" href="/favicon.ico"/>
+    <style>
+      * { box-sizing: border-box; }
+      body { margin: 0; -webkit-text-size-adjust: 100%; }
+
+      @media (max-width: 640px) {
+        /* Admin + ObraView headers */
+        .bx-header { padding: 10px 14px !important; flex-wrap: wrap !important; gap: 8px !important; }
+        .bx-header-btns { gap: 6px !important; flex-wrap: wrap !important; }
+
+        /* Tabs — scroll horizontally */
+        .bx-tabs { overflow-x: auto !important; -webkit-overflow-scrolling: touch; padding: 0 8px !important; flex-wrap: nowrap !important; }
+        .bx-tabs button { white-space: nowrap; padding: 10px 12px !important; font-size: 10px !important; }
+
+        /* Main content padding */
+        .bx-content { padding: 12px 10px !important; }
+
+        /* KPI grids — 2 cols on mobile */
+        .bx-kpis-4 { grid-template-columns: 1fr 1fr !important; gap: 8px !important; }
+
+        /* ObraView registro layout — stack vertically */
+        .bx-registro-layout { flex-direction: column !important; }
+        .bx-registro-sidebar { width: 100% !important; min-width: unset !important; }
+
+        /* Tables — allow horizontal scroll */
+        .bx-table-wrap { overflow-x: auto !important; -webkit-overflow-scrolling: touch; }
+        .bx-table-wrap table { font-size: 10px !important; min-width: 500px; }
+        .bx-table-wrap th, .bx-table-wrap td { padding: 5px 6px !important; }
+
+        /* Obra cards in obras list */
+        .bx-obra-card { flex-direction: column !important; align-items: flex-start !important; gap: 8px !important; }
+        .bx-obra-card-btns { flex-wrap: wrap !important; gap: 6px !important; width: 100% !important; }
+        .bx-obra-card-btns button { flex: 1 !important; min-width: 80px; font-size: 9px !important; padding: 5px 8px !important; }
+
+        /* Filters wrap */
+        .bx-filters { flex-wrap: wrap !important; gap: 6px !important; }
+        .bx-filters select, .bx-filters input { font-size: 11px !important; }
+
+        /* Modal full width */
+        .bx-modal { padding: 10px !important; }
+        .bx-modal > div { padding: 16px !important; max-height: 92vh !important; }
+
+        /* Export buttons wrap */
+        .bx-export-btns { flex-wrap: wrap !important; gap: 6px !important; }
+        .bx-export-btns button { font-size: 10px !important; padding: 7px 10px !important; }
+
+        /* Panel padding */
+        .bx-panel { padding: 12px 10px !important; }
+      }
+    </style>
   </head>
   <body>
     <div id="root"></div>

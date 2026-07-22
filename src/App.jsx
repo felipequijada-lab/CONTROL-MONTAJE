@@ -1786,16 +1786,16 @@ function AdminPanel({ obras, onBack, onObraCreated, setError, onViewObra, curren
 
   return (
     <div style={{ minHeight:"100vh", background:"#e2e8f0" }}>
-      <div style={{ background:"#f8fafc", borderBottom:"1px solid #cbd5e1", padding:"14px 28px", display:"flex", alignItems:"center", gap:16 }}>
+      <div className="bx-header" style={{ background:"#f8fafc", borderBottom:"1px solid #cbd5e1", padding:"14px 28px", display:"flex", alignItems:"center", gap:16 }}>
         <button onClick={onBack} style={btnSecondary}>← Volver</button>
         <div style={{ fontFamily:"'Archivo Black',sans-serif", fontSize:18, color:"#d97706" }}>⚙ PANEL ADMINISTRADOR</div>
         {currentUser?.nombre && <div style={{ fontSize:11,color:"#64748b" }}>Bienvenido, <b>{currentUser.nombre}</b></div>}
-        <div style={{ marginLeft:"auto", display:"flex", gap:8 }}>
+        <div className="bx-header-btns" style={{ marginLeft:"auto", display:"flex", gap:8 }}>
           <button onClick={()=>generateInformeEjecutivo(adminStats,weekColumns)} disabled={adminStats.length===0} style={{ background:adminStats.length>0?"#d97706":"#e2e8f0",color:adminStats.length>0?"#fff":"#94a3b8",border:"none",borderRadius:6,padding:"8px 16px",cursor:adminStats.length>0?"pointer":"default",fontFamily:"'DM Mono',monospace",fontSize:11 }}>📊 Informe Ejecutivo</button>
           <button onClick={descargarBackup} style={{ background:"#f1f5f9",color:"#475569",border:"1px solid #cbd5e1",borderRadius:6,padding:"8px 16px",cursor:"pointer",fontFamily:"'DM Mono',monospace",fontSize:11 }}>⬇ Backup Completo</button>
         </div>
       </div>
-      <div style={{ display:"flex", background:"#f8fafc", borderBottom:"1px solid #cbd5e1", padding:"0 28px" }}>
+      <div className="bx-tabs" style={{ display:"flex", background:"#f8fafc", borderBottom:"1px solid #cbd5e1", padding:"0 28px" }}>
         {[["resumen","Dashboard"],["aprobacion","Aprobaciones"],["obras","Obras"],["usuarios","Usuarios"],["elementos","Elementos"],["programa","Programa"],["historico","Histórico"]].map(([k,l])=>(
           <button key={k} onClick={()=>setTab(k)} style={{ background:"none",border:"none",cursor:"pointer",padding:"12px 16px",color:tab===k?"#d97706":"#64748b",borderBottom:tab===k?"2px solid #d97706":"2px solid transparent",fontFamily:"'DM Mono',monospace",fontSize:11,display:"flex",alignItems:"center",gap:6 }}>
             {l}
@@ -1808,7 +1808,7 @@ function AdminPanel({ obras, onBack, onObraCreated, setError, onViewObra, curren
         ))}
       </div>
 
-      <div style={{ padding:"24px 28px", maxWidth:1200, margin:"0 auto" }}>
+      <div className="bx-content" style={{ padding:"24px 28px", maxWidth:1200, margin:"0 auto" }}>
 
         {/* ── DASHBOARD ── */}
         {tab==="resumen" && (
@@ -1919,7 +1919,7 @@ function AdminPanel({ obras, onBack, onObraCreated, setError, onViewObra, curren
             <Panel title="OBRAS ACTIVAS">
               {obrasActivas.length===0&&<div style={{ color:"#94a3b8",fontSize:12 }}>No hay obras activas.</div>}
               {obrasActivas.map(o=>(
-                <div key={o.id} style={{ padding:"12px 0",borderBottom:"1px solid #f1f5f9",display:"flex",justifyContent:"space-between",alignItems:"center" }}>
+                <div key={o.id} className="bx-obra-card" style={{ padding:"12px 0",borderBottom:"1px solid #f1f5f9",display:"flex",justifyContent:"space-between",alignItems:"center" }}>
                   <div>
                     <div style={{ display:"flex",alignItems:"center",gap:8 }}>
                       <span style={{ color:"#1e293b",fontWeight:"bold" }}>{o.nombre}</span>
@@ -1929,7 +1929,7 @@ function AdminPanel({ obras, onBack, onObraCreated, setError, onViewObra, curren
                     </div>
                     <div style={{ color:"#94a3b8",fontSize:10 }}>{o.ubicacion} · {o.fecha_inicio}</div>
                   </div>
-                  <div style={{ display:"flex",gap:8,alignItems:"center" }}>
+                  <div className="bx-obra-card-btns" style={{ display:"flex",gap:8,alignItems:"center" }}>
                     <button onClick={()=>setEditingObra({id:o.id,nombre:o.nombre,ubicacion:o.ubicacion||"",fecha_inicio:o.fecha_inicio||""})} style={{ background:"#f1f5f9",color:"#475569",border:"1px solid #cbd5e1",borderRadius:6,padding:"6px 12px",cursor:"pointer",fontFamily:"'DM Mono',monospace",fontSize:10 }}>✎ Editar</button>
                     <button onClick={()=>toggleListadoEstado(o)} style={{ background:"#f1f5f9",color:"#475569",border:"1px solid #cbd5e1",borderRadius:6,padding:"6px 12px",cursor:"pointer",fontFamily:"'DM Mono',monospace",fontSize:10 }}>
                       Marcar como {o.listado_estado==="definitivo"?"Preliminar":"Definitivo"}
@@ -2131,7 +2131,7 @@ function AdminPanel({ obras, onBack, onObraCreated, setError, onViewObra, curren
           <Panel title="OBRAS CERRADAS — ARCHIVO HISTÓRICO">
             {obrasCerradas.length===0&&<div style={{ color:"#94a3b8",fontSize:12,textAlign:"center",padding:20 }}>No hay obras cerradas aún.</div>}
             {obrasCerradas.map(o=>(
-              <div key={o.id} style={{ padding:"12px 0",borderBottom:"1px solid #f1f5f9",display:"flex",justifyContent:"space-between",alignItems:"center" }}>
+              <div key={o.id} className="bx-obra-card" style={{ padding:"12px 0",borderBottom:"1px solid #f1f5f9",display:"flex",justifyContent:"space-between",alignItems:"center" }}>
                 <div>
                   <div style={{ color:"#1e293b",fontWeight:"bold" }}>{o.nombre}</div>
                   <div style={{ color:"#94a3b8",fontSize:10 }}>{o.ubicacion} · {o.fecha_inicio}</div>
@@ -2553,7 +2553,7 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
         </div>
       )}
       {/* Tabs */}
-      <div style={{ display:"flex", background:"#f8fafc", borderBottom:"1px solid #cbd5e1", padding:"0 28px" }}>
+      <div className="bx-tabs" style={{ display:"flex", background:"#f8fafc", borderBottom:"1px solid #cbd5e1", padding:"0 28px" }}>
         {[["registro","▷ REGISTRO"],["elementos","◈ ELEMENTOS"],["historial","◫ HISTORIAL"],["incidencias","⚠ INCIDENCIAS"],["semanal","◷ SEMANAL"],["curvaS","↗ GRÁFICOS"]].map(([k,l])=>(
           <button key={k} onClick={()=>setActiveTab(k)} style={{ background:"none",border:"none",cursor:"pointer",padding:"12px 16px",color:activeTab===k?"#d97706":"#64748b",borderBottom:activeTab===k?"2px solid #d97706":"2px solid transparent",fontFamily:"'DM Mono',monospace",fontSize:11 }}>{l}</button>
         ))}
@@ -2754,7 +2754,7 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
               <StatCard label="MONTADOS" value={montadosPos.size} sub={fmt2(stats.all.areaMounted)+" m²"} color="#16a34a"/>
               <StatCard label="% AVANCE" value={fmtPct(pctAll)} sub={fmt2(stats.all.areaMounted)+" / "+fmt2(stats.all.areaTotal)+" m²"} color="#d97706"/>
             </div>
-            <div style={{ display:"flex",gap:6,marginBottom:14,flexWrap:"wrap" }}>
+            <div className="bx-filters" style={{ display:"flex",gap:6,marginBottom:14,flexWrap:"wrap" }}>
               <input placeholder="Buscar…" value={filterSearch} onChange={e=>{setFilterSearch(e.target.value);setElemPage(0);}} style={{ ...inp,width:160,margin:0 }}/>
               <select value={filterLote}   onChange={e=>{setFilterLote(e.target.value);setElemPage(0);}}   style={{ ...inp,margin:0,width:"auto" }}>{lotes.map(t=><option key={t} value={t}>{t==="TODOS"?"Lote: Todos":t}</option>)}</select>
               <select value={filterTorre}  onChange={e=>{setFilterTorre(e.target.value);setElemPage(0);}}  style={{ ...inp,margin:0,width:"auto" }}>{torres.map(t=><option key={t} value={t}>{t==="TODAS"?"Torre: Todas":t}</option>)}</select>
@@ -2974,7 +2974,7 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
                 </div>
                 <div style={{ display:"flex",flexDirection:"column",gap:4 }}>
                   <div style={{ fontSize:9,color:"#64748b",letterSpacing:1,marginBottom:2 }}>INFORME SEMANAL</div>
-                  <div style={{ display:"flex",gap:8 }}>
+                  <div className="bx-export-btns" style={{ display:"flex",gap:8 }}>
                     <button onClick={()=>{ 
                       if(!currentWeekData){
                         const hasPendingThisWeek = dailyStats.some(d=>!d.aprobado&&getWeekNumber(d.date)===selectedWeek);
