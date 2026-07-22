@@ -3077,8 +3077,7 @@ function descargarPlanoComoImagen(elements, montadosPos, obraNombre) {
 function PlanoAvance({ elements, montadosPos }) {
   const torres = [...new Set(elements.map(e=>e.torre).filter(Boolean))].sort();
   const pisos  = [...new Set(elements.map(e=>e.piso).filter(Boolean))].sort((a,b)=>Number(b)-Number(a));
-  // P arriba, MD abajo — refleja el orden físico de montaje
-  const TIPOS  = ['P','MD'];
+  const TIPOS  = ['P','MD']; // P arriba, MD abajo — orden físico
 
   if(torres.length===0) return <div style={{ color:"#94a3b8",fontSize:12 }}>Sin elementos cargados.</div>;
 
@@ -3093,52 +3092,69 @@ function PlanoAvance({ elements, montadosPos }) {
   }
 
   const cellStyle = (status) => ({
-    width:28, height:20, borderRadius:3, display:'inline-flex', alignItems:'center', justifyContent:'center',
+    width:'100%', height:22, borderRadius:2, display:'flex', alignItems:'center', justifyContent:'center',
     fontSize:9, fontFamily:"'DM Mono',monospace", fontWeight:'bold',
     background: status==='completo'?'#16a34a': status==='parcial'?'#86efac': status==='empty'?'transparent':'#e2e8f0',
     color: status==='completo'?'#fff': status==='parcial'?'#166534':'#94a3b8',
     border: `1px solid ${status==='completo'?'#15803d':status==='parcial'?'#4ade80':status==='empty'?'transparent':'#cbd5e1'}`,
   });
 
+  const colW = Math.max(60, Math.min(100, Math.floor(480/torres.length)));
+
   return (
     <div style={{ overflowX:'auto' }}>
-      <table style={{ borderCollapse:'separate', borderSpacing:3, fontSize:10 }}>
+      <table style={{ borderCollapse:'collapse', fontSize:10, tableLayout:'fixed' }}>
         <thead>
           <tr>
-            <th style={{ width:40 }}/>
-            {torres.map(t=>TIPOS.map(tip=>(
-              <th key={`${t}-${tip}`} style={{ textAlign:'center', color:tip==='MD'?'#16a34a':'#2563eb', fontSize:8, paddingBottom:4, width:28 }}>{tip}</th>
-            )))}
+            <th style={{ width:48 }}/>
+            <th style={{ width:32, color:'#94a3b8', fontSize:8, textAlign:'center', paddingBottom:4 }}/>
+            {torres.map(t=>(
+              <th key={t} style={{ width:colW, textAlign:'center', color:'#1e293b', fontSize:11, fontWeight:'bold', paddingBottom:6, borderBottom:'2px solid #e2e8f0' }}>
+                {t}
+              </th>
+            ))}
           </tr>
         </thead>
         <tbody>
-          {pisos.map(piso=>(
-            <tr key={piso}>
-              <td style={{ color:'#64748b', fontSize:10, fontWeight:'bold', paddingRight:8, textAlign:'right' }}>P{piso}</td>
-              {torres.map(t=>TIPOS.map(tipo=>{
-                const status = getCellStatus(t, piso, tipo);
-                return (
-                  <td key={`${t}-${piso}-${tipo}`} style={{ padding:1 }}>
-                    <div style={cellStyle(status)}>
-                      {status==='completo'?'✓': status==='parcial'?'~':''}
-                    </div>
+          {pisos.map((piso,pi)=>(
+            TIPOS.map((tipo,ti)=>(
+              <tr key={`${piso}-${tipo}`}>
+                {/* Piso label only on first tipo row (P) */}
+                {ti===0 && (
+                  <td rowSpan={2} style={{ color:'#64748b', fontSize:10, fontWeight:'bold', textAlign:'right', paddingRight:8, verticalAlign:'middle', borderRight:'2px solid #e2e8f0', borderTop: pi>0?'2px solid #e2e8f0':'none' }}>
+                    P{piso}
                   </td>
-                );
-              }))}
-            </tr>
+                )}
+                {/* Tipo label */}
+                <td style={{ color:tipo==='MD'?'#16a34a':'#2563eb', fontSize:8, fontWeight:'bold', textAlign:'right', paddingRight:6, paddingTop:2, paddingBottom:2, width:32 }}>
+                  {tipo}
+                </td>
+                {/* Cells */}
+                {torres.map(t=>{
+                  const status = getCellStatus(t, piso, tipo);
+                  return (
+                    <td key={`${t}-${piso}-${tipo}`} style={{ padding:'2px 4px', borderTop: ti===0&&pi>0?'2px solid #e2e8f0':'none' }}>
+                      <div style={cellStyle(status)}>
+                        {status==='completo'?'✓': status==='parcial'?'~':''}
+                      </div>
+                    </td>
+                  );
+                })}
+              </tr>
+            ))
           ))}
-          {/* Torre names below the grid */}
+          {/* Torre names below */}
           <tr>
-            <td/>
+            <td colSpan={2}/>
             {torres.map(t=>(
-              <td key={t} colSpan={2} style={{ textAlign:'center', color:'#1e293b', fontSize:11, fontWeight:'bold', paddingTop:8 }}>
+              <td key={t} style={{ textAlign:'center', color:'#64748b', fontSize:9, fontWeight:'bold', paddingTop:8, borderTop:'2px solid #e2e8f0' }}>
                 {t}
               </td>
             ))}
           </tr>
         </tbody>
       </table>
-      <div style={{ display:'flex', gap:16, marginTop:8, fontSize:10, color:'#64748b' }}>
+      <div style={{ display:'flex', gap:16, marginTop:10, fontSize:10, color:'#64748b' }}>
         <div style={{ display:'flex', alignItems:'center', gap:4 }}>
           <div style={{ width:16,height:12,background:'#16a34a',borderRadius:2 }}/> Completo (100%)
         </div>
