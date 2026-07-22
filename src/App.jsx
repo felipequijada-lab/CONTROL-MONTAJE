@@ -759,7 +759,7 @@ function GerenteView({ obras, currentUser, onLogout, setError }) {
         {loadingStats ? <LoadingScreen/> : (<>
 
           {/* KPIs consolidados */}
-          <div style={{ display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:20 }}>
+          <div className="bx-kpis-4" style={{ display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:20 }}>
             {[
               {label:"OBRAS ACTIVAS",    value:adminStats.length,           color:"#d97706", unit:""},
               {label:"m² TOTAL",         value:fmt2(adminStats.reduce((s,a)=>s+a.totalArea,0)),  color:"#1e293b", unit:" m²"},
@@ -1050,7 +1050,7 @@ function ClientePortal({ token }) {
       <div className="cp-pad" style={{ maxWidth:1100,margin:"0 auto",padding:"20px 16px" }}>
 
         {/* KPIs — 2 columnas en móvil, 4 en desktop */}
-        <div className="cp-kpis" style={{ display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:20 }}>
+        <div className="cp-kpis bx-kpis-4" style={{ display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:20 }}>
           {[
             {label:"m² TOTAL OBRA",   value:fmt2(totalArea),   color:"#1e293b", sub:null},
             {label:"m² DESPACHADOS",  value:fmt2(receivedArea),color:"#2563eb", sub:fmtPct(pctReceived)+" del total"},
@@ -2520,7 +2520,7 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
             <div style={{ fontSize:9, color:"#94a3b8", letterSpacing:2 }}>{obra.ubicacion} · SEMANA {getWeekNumber(TODAY)}</div>
           </div>
         </div>
-        <div style={{ display:"flex", gap:6, flexWrap:"wrap", alignItems:"center" }}>
+        <div className="bx-kpis-obra" style={{ display:"flex", gap:6, flexWrap:"wrap", alignItems:"center" }}>
           <KPIBox label="RECIBIDOS" value={fmtPct(pctRec)} sub={fmt2(stats.areaReceived)+" m²"} color="#2563eb"/>
           <KPIBox label="STOCK EN OBRA" value={elements.filter(e=>getEstado(elKeyOf(e))==="recibido").length+" elem"} sub={fmt2(elements.filter(e=>getEstado(elKeyOf(e))==="recibido").reduce((s,e)=>s+e.area,0))+" m²"} color="#f59e0b"/>
           <KPIBox label="MD/MDT" value={fmtPct(pctMD)} sub={fmt2(stats.md.areaMounted)+"/"+fmt2(stats.md.areaTotal)+" m²"} color="#16a34a"/>
@@ -2559,11 +2559,11 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
         ))}
       </div>
 
-      <div style={{ padding:"20px 28px", maxWidth:1400, margin:"0 auto" }}>
+      <div className="bx-content" style={{ padding:"20px 28px", maxWidth:1400, margin:"0 auto" }}>
 
         {/* ── REGISTRO ── */}
         {activeTab==="registro" && (
-          <div style={{ display:"grid", gridTemplateColumns:"320px 1fr", gap:20 }}>
+          <div className="bx-registro-layout" style={{ display:"grid", gridTemplateColumns:"320px 1fr", gap:20 }}>
             <div>
               {isClosed ? (
                 <Panel title="OBRA CERRADA">
@@ -2748,7 +2748,7 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
         {/* ── ELEMENTOS ── */}
         {activeTab==="elementos" && (
           <Panel title="INVENTARIO DE ELEMENTOS">
-            <div style={{ display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:16 }}>
+            <div className="bx-kpis-4" style={{ display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:16 }}>
               <StatCard label="PENDIENTES" value={elements.filter(e=>getEstado(elKeyOf(e))==="pendiente").length} sub={fmt2(elements.filter(e=>getEstado(elKeyOf(e))==="pendiente").reduce((s,e)=>s+e.area,0))+" m²"} color="#94a3b8"/>
               <StatCard label="RECIBIDOS EN OBRA" value={elements.filter(e=>getEstado(elKeyOf(e))!=="pendiente").length} sub={fmt2(elements.filter(e=>getEstado(elKeyOf(e))!=="pendiente").reduce((s,e)=>s+e.area,0))+" m²"} color="#2563eb"/>
               <StatCard label="MONTADOS" value={montadosPos.size} sub={fmt2(stats.all.areaMounted)+" m²"} color="#16a34a"/>
