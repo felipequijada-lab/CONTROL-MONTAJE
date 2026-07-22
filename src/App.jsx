@@ -927,6 +927,10 @@ function ClientePortal({ token }) {
   return (
     <div style={{ minHeight:"100vh",background:"#f1f5f9",fontFamily:"'DM Mono','Courier New',monospace" }}>
       <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Archivo+Black&display=swap" rel="stylesheet"/>
+      <link rel="manifest" href="/manifest-cliente.json"/>
+      <meta name="apple-mobile-web-app-capable" content="yes"/>
+      <meta name="apple-mobile-web-app-title" content={obra ? `Avance ${obra.nombre}` : "Avance Obra"}/>
+      <meta name="theme-color" content="#d97706"/>
       <style>{`
         @media(max-width:600px){
           .cp-header{padding:12px 14px!important;flex-direction:column!important;align-items:flex-start!important;gap:4px!important;}
