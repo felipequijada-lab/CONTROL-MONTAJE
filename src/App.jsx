@@ -3075,10 +3075,10 @@ function descargarPlanoComoImagen(elements, montadosPos, obraNombre) {
 }
 
 function PlanoAvance({ elements, montadosPos }) {
-  // Get unique torres and pisos from data, sorted
   const torres = [...new Set(elements.map(e=>e.torre).filter(Boolean))].sort();
-  const pisos  = [...new Set(elements.map(e=>e.piso).filter(Boolean))].sort((a,b)=>Number(b)-Number(a)); // P4 top, P1 bottom
-  const TIPOS  = ['MD','P'];
+  const pisos  = [...new Set(elements.map(e=>e.piso).filter(Boolean))].sort((a,b)=>Number(b)-Number(a));
+  // P arriba, MD abajo — refleja el orden físico de montaje
+  const TIPOS  = ['P','MD'];
 
   if(torres.length===0) return <div style={{ color:"#94a3b8",fontSize:12 }}>Sin elementos cargados.</div>;
 
@@ -3105,17 +3105,9 @@ function PlanoAvance({ elements, montadosPos }) {
       <table style={{ borderCollapse:'separate', borderSpacing:3, fontSize:10 }}>
         <thead>
           <tr>
-            <th style={{ width:40, textAlign:'left', color:'#94a3b8', fontSize:9, paddingBottom:4 }}>PISO</th>
-            {torres.map(t=>(
-              <th key={t} colSpan={2} style={{ textAlign:'center', color:'#1e293b', fontSize:13, fontWeight:'bold', paddingBottom:4, minWidth:62 }}>
-                {t}
-              </th>
-            ))}
-          </tr>
-          <tr>
-            <th/>
+            <th style={{ width:40 }}/>
             {torres.map(t=>TIPOS.map(tip=>(
-              <th key={`${t}-${tip}`} style={{ textAlign:'center', color:tip==='MD'?'#16a34a':'#2563eb', fontSize:8, paddingBottom:6, width:28 }}>{tip}</th>
+              <th key={`${t}-${tip}`} style={{ textAlign:'center', color:tip==='MD'?'#16a34a':'#2563eb', fontSize:8, paddingBottom:4, width:28 }}>{tip}</th>
             )))}
           </tr>
         </thead>
@@ -3135,9 +3127,18 @@ function PlanoAvance({ elements, montadosPos }) {
               }))}
             </tr>
           ))}
+          {/* Torre names below the grid */}
+          <tr>
+            <td/>
+            {torres.map(t=>(
+              <td key={t} colSpan={2} style={{ textAlign:'center', color:'#1e293b', fontSize:11, fontWeight:'bold', paddingTop:8 }}>
+                {t}
+              </td>
+            ))}
+          </tr>
         </tbody>
       </table>
-      <div style={{ display:'flex', gap:16, marginTop:12, fontSize:10, color:'#64748b' }}>
+      <div style={{ display:'flex', gap:16, marginTop:8, fontSize:10, color:'#64748b' }}>
         <div style={{ display:'flex', alignItems:'center', gap:4 }}>
           <div style={{ width:16,height:12,background:'#16a34a',borderRadius:2 }}/> Completo (100%)
         </div>
