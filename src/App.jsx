@@ -1230,7 +1230,7 @@ export default function App() {
       {error && <ErrorBar msg={error} onClose={()=>setError(null)}/>}
       {screen==="login"      && <LoginScreen onGoogleLogin={handleGoogleLogin} loading={loading}/>}
       {screen==="select"     && <SelectScreen obras={obras.filter(o=>o.estado!=="cerrada")} currentUser={currentUser} onSelectObra={o=>{setSelectedObra(o);setScreen("obra");}} onLogout={handleLogout} onRefresh={loadObras}/>}
-      {screen==="admin"      && <AdminPanel obras={obras} onBack={handleLogout} onObraCreated={loadObras} setError={setError} onViewObra={o=>{setSelectedObra(o);setScreen("obraAdmin");}}/>}
+      {screen==="admin"      && <AdminPanel obras={obras} onBack={handleLogout} onObraCreated={loadObras} setError={setError} onViewObra={o=>{setSelectedObra(o);setScreen("obraAdmin");}} currentUser={currentUser}/>}
       {screen==="obra"       && selectedObra && <ObraView obra={selectedObra} onBack={()=>{currentUser?.role==="admin"?setScreen("admin"):setScreen("select");}} setError={setError} isAdmin={false} currentUser={currentUser}/>}
       {screen==="obraAdmin"  && selectedObra && <ObraView obra={selectedObra} onBack={()=>setScreen("admin")} setError={setError} isAdmin={true} currentUser={currentUser} onObraUpdated={loadObras}/>}
       {screen==="gerente"    && <GerenteView obras={obras} currentUser={currentUser} onLogout={handleLogout} setError={setError}/>}
@@ -1293,7 +1293,7 @@ function SelectScreen({ obras, onSelectObra, onAdminClick, onRefresh, currentUse
 }
 
 // ── Admin Panel ───────────────────────────────────────────────────────────────
-function AdminPanel({ obras, onBack, onObraCreated, setError, onViewObra }) {
+function AdminPanel({ obras, onBack, onObraCreated, setError, onViewObra, currentUser }) {
   const [tab, setTab] = useState("resumen");
   const [newObra, setNewObra] = useState({ nombre:"", ubicacion:"", fecha_inicio:TODAY });
   const [editingObra, setEditingObra] = useState(null); // {id, nombre, ubicacion, fecha_inicio}
@@ -1670,6 +1670,7 @@ function AdminPanel({ obras, onBack, onObraCreated, setError, onViewObra }) {
       <div style={{ background:"#f8fafc", borderBottom:"1px solid #cbd5e1", padding:"14px 28px", display:"flex", alignItems:"center", gap:16 }}>
         <button onClick={onBack} style={btnSecondary}>← Volver</button>
         <div style={{ fontFamily:"'Archivo Black',sans-serif", fontSize:18, color:"#d97706" }}>⚙ PANEL ADMINISTRADOR</div>
+        {currentUser?.nombre && <div style={{ fontSize:11,color:"#64748b" }}>Bienvenido, <b>{currentUser.nombre}</b></div>}
         <div style={{ marginLeft:"auto", display:"flex", gap:8 }}>
           <button onClick={()=>generateInformeEjecutivo(adminStats,weekColumns)} disabled={adminStats.length===0} style={{ background:adminStats.length>0?"#d97706":"#e2e8f0",color:adminStats.length>0?"#fff":"#94a3b8",border:"none",borderRadius:6,padding:"8px 16px",cursor:adminStats.length>0?"pointer":"default",fontFamily:"'DM Mono',monospace",fontSize:11 }}>📊 Informe Ejecutivo</button>
           <button onClick={descargarBackup} style={{ background:"#f1f5f9",color:"#475569",border:"1px solid #cbd5e1",borderRadius:6,padding:"8px 16px",cursor:"pointer",fontFamily:"'DM Mono',monospace",fontSize:11 }}>⬇ Backup Completo</button>
