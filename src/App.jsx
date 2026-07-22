@@ -3,6 +3,43 @@ import * as XLSX from "xlsx";
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "https://uxgkiuhcqcvcwkvtjqvo.supabase.co";
 const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_KEY || "sb_publishable_CSpI4hVvQmUWai7oQcPmuQ_mZe3EYqA";
+
+// Emails con acceso de administrador — para agregar uno nuevo, añadirlo a esta lista
+const ADMIN_EMAILS = [
+  "felipe.quijada@baumax.cl",
+  "oscar.maldonado@baumax.cl",
+];
+
+// Supabase Auth helpers
+async function signInWithGoogle() {
+  const res = await fetch(`${SUPABASE_URL}/auth/v1/authorize?provider=google&redirect_to=${encodeURIComponent(window.location.origin)}`, {
+    headers: { "apikey": SUPABASE_KEY }
+  });
+  // Use direct URL redirect
+  window.location.href = `${SUPABASE_URL}/auth/v1/authorize?provider=google&redirect_to=${encodeURIComponent(window.location.origin)}`;
+}
+
+async function getSession() {
+  // Check URL hash for access_token (OAuth callback)
+  const hash = window.location.hash;
+  if(hash && hash.includes('access_token')) {
+    const params = new URLSearchParams(hash.substring(1));
+    const accessToken = params.get('access_token');
+    if(accessToken) {
+      // Get user from token
+      const res = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+        headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${accessToken}` }
+      });
+      if(res.ok) {
+        const user = await res.json();
+        // Clean URL
+        window.history.replaceState({}, document.title, window.location.pathname);
+        return { user, accessToken };
+      }
+    }
+  }
+  return null;
+}
 const ADMIN_PINS = ["18670610", "18663499"];
 const TIPOS_MD = ["MD", "MDT"];
 
@@ -970,58 +1007,67 @@ export default function App() {
   const [obras, setObras] = useState([]);
   const [selectedObra, setSelectedObra] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
-  const [adminPin, setAdminPin] = useState("");
-  const [adminError, setAdminError] = useState(false);
-  const [loginMail, setLoginMail] = useState("");
-  const [loginRut, setLoginRut] = useState("");
-  const [loginError, setLoginError] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!urlToken);
   const [error, setError] = useState(null);
 
-  useEffect(()=>{ loadObras(); },[]);
+  useEffect(()=>{
+    if(urlToken) return; // portal cliente no necesita sesión
+    // Check for OAuth callback (access_token in URL hash)
+    handleOAuthCallback();
+  },[]);
 
-  async function loadObras() {
+  async function handleOAuthCallback() {
     setLoading(true);
-    try { const data = await sbFetch("obras?select=*&order=created_at.desc"); setObras(data); }
-    catch(e) { setError("Error: "+e.message); }
+    try {
+      const session = await getSession();
+      if(session) {
+        const { user } = session;
+        const email = user.email || "";
+        // Restrict to @baumax.cl only
+        if(!email.endsWith("@baumax.cl")){
+          setError(`Acceso denegado — solo cuentas @baumax.cl. (${email})`);
+          setLoading(false);
+          return;
+        }
+        const isAdmin = ADMIN_EMAILS.includes(email.toLowerCase());
+        const nombre = user.user_metadata?.full_name || email.split("@")[0];
+        setCurrentUser({ nombre, email, role: isAdmin ? "admin" : "encargado" });
+        await loadObras(isAdmin);
+        setScreen(isAdmin ? "admin" : "select");
+      }
+    } catch(e){ setError("Error: "+e.message); }
     setLoading(false);
   }
 
-  async function handleUserLogin() {
-    setLoginError("");
+  async function loadObras(isAdminUser) {
     try {
-      const users = await sbFetch(`usuarios?mail=ilike.${encodeURIComponent(loginMail.trim())}&rut=eq.${encodeURIComponent(loginRut.trim())}&select=*`);
-      if(users.length===0){ setLoginError("Mail o RUT incorrecto"); return; }
-      const user = users[0];
-      setCurrentUser({...user, role:"encargado"});
-      const obrasActivas = obras.filter(o=>o.estado!=="cerrada");
-      if(obrasActivas.length===1){ setSelectedObra(obrasActivas[0]); setScreen("obra"); }
-      else setScreen("select");
-    } catch(e){ setLoginError("Error al conectar"); }
+      const data = await sbFetch("obras?select=*&order=created_at.desc");
+      setObras(data);
+      return data;
+    } catch(e){ setError("Error: "+e.message); return []; }
   }
 
-  function handleAdminLogin() {
-    if(ADMIN_PINS.includes(adminPin)){ setCurrentUser({nombre:"Admin",role:"admin"}); setScreen("admin"); setAdminError(false); }
-    else setAdminError(true);
+  async function handleGoogleLogin() {
+    setLoading(true);
+    signInWithGoogle();
   }
 
   function handleLogout() {
     setCurrentUser(null); setSelectedObra(null);
-    setLoginMail(""); setLoginRut(""); setAdminPin(""); setLoginError("");
     setScreen("login");
   }
 
-  if(loading) return <LoadingScreen/>;
+  if(loading && !urlToken) return <LoadingScreen/>;
 
   return (
     <div style={{ minHeight:"100vh", background:"#e2e8f0", fontFamily:"'DM Mono','Courier New',monospace" }}>
       <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Archivo+Black&display=swap" rel="stylesheet"/>
       {error && <ErrorBar msg={error} onClose={()=>setError(null)}/>}
-      {screen==="login"      && <LoginScreen loginMail={loginMail} setLoginMail={setLoginMail} loginRut={loginRut} setLoginRut={setLoginRut} loginError={loginError} onLogin={handleUserLogin} adminPin={adminPin} setAdminPin={setAdminPin} adminError={adminError} onAdminLogin={handleAdminLogin}/>}
-      {screen==="select"     && <SelectScreen obras={obras.filter(o=>o.estado!=="cerrada")} currentUser={currentUser} onSelectObra={o=>{setSelectedObra(o);setScreen("obra");}} onLogout={handleLogout} onRefresh={loadObras}/>}
-      {screen==="admin"      && <AdminPanel obras={obras} onBack={handleLogout} onObraCreated={loadObras} setError={setError} onViewObra={o=>{setSelectedObra(o);setScreen("obraAdmin");}}/>}
+      {screen==="login"      && <LoginScreen onGoogleLogin={handleGoogleLogin} loading={loading}/>}
+      {screen==="select"     && <SelectScreen obras={obras.filter(o=>o.estado!=="cerrada")} currentUser={currentUser} onSelectObra={o=>{setSelectedObra(o);setScreen("obra");}} onLogout={handleLogout} onRefresh={()=>loadObras(false)}/>}
+      {screen==="admin"      && <AdminPanel obras={obras} onBack={handleLogout} onObraCreated={()=>loadObras(true)} setError={setError} onViewObra={o=>{setSelectedObra(o);setScreen("obraAdmin");}}/>}
       {screen==="obra"       && selectedObra && <ObraView obra={selectedObra} onBack={()=>{currentUser?.role==="admin"?setScreen("admin"):setScreen("select");}} setError={setError} isAdmin={false} currentUser={currentUser}/>}
-      {screen==="obraAdmin"  && selectedObra && <ObraView obra={selectedObra} onBack={()=>setScreen("admin")} setError={setError} isAdmin={true} currentUser={currentUser} onObraUpdated={loadObras}/>}
+      {screen==="obraAdmin"  && selectedObra && <ObraView obra={selectedObra} onBack={()=>setScreen("admin")} setError={setError} isAdmin={true} currentUser={currentUser} onObraUpdated={()=>loadObras(true)}/>}
       {screen==="cliente"    && <ClientePortal token={clienteToken}/>}
     </div>
   );
@@ -1029,34 +1075,23 @@ export default function App() {
 
 
 // ── Login Screen ──────────────────────────────────────────────────────────────
-function LoginScreen({ loginMail, setLoginMail, loginRut, setLoginRut, loginError, onLogin, adminPin, setAdminPin, adminError, onAdminLogin }) {
-  const [mode, setMode] = useState("encargado");
+function LoginScreen({ onGoogleLogin, loading }) {
   return (
     <div style={{ minHeight:"100vh", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:24 }}>
       <div style={{ fontFamily:"'Archivo Black',sans-serif", fontSize:24, color:"#d97706", marginBottom:4 }}>◈ CONTROL DE MONTAJE</div>
       <div style={{ fontSize:10, color:"#94a3b8", letterSpacing:3, marginBottom:32 }}>BAUMAX SPA</div>
-      <div style={{ background:"#f8fafc", border:"1px solid #cbd5e1", borderRadius:12, padding:28, width:"100%", maxWidth:400 }}>
-        <div style={{ display:"flex", marginBottom:20, borderBottom:"1px solid #e2e8f0" }}>
-          <button onClick={()=>setMode("encargado")} style={{ flex:1,padding:"10px",background:"none",border:"none",cursor:"pointer",color:mode==="encargado"?"#d97706":"#64748b",borderBottom:mode==="encargado"?"2px solid #d97706":"2px solid transparent",fontFamily:"'DM Mono',monospace",fontSize:11 }}>ENCARGADO</button>
-          <button onClick={()=>setMode("admin")} style={{ flex:1,padding:"10px",background:"none",border:"none",cursor:"pointer",color:mode==="admin"?"#d97706":"#64748b",borderBottom:mode==="admin"?"2px solid #d97706":"2px solid transparent",fontFamily:"'DM Mono',monospace",fontSize:11 }}>ADMINISTRADOR</button>
-        </div>
-        {mode==="encargado" ? (
-          <div>
-            <Label>Correo electrónico</Label>
-            <input type="email" value={loginMail} onChange={e=>setLoginMail(e.target.value)} placeholder="nombre@empresa.cl" style={inp}/>
-            <Label>RUT (sin puntos, con guión)</Label>
-            <input value={loginRut} onChange={e=>setLoginRut(e.target.value)} onKeyDown={e=>e.key==="Enter"&&onLogin()} placeholder="12345678-9" style={inp}/>
-            {loginError&&<div style={{ color:"#dc2626",fontSize:11,marginTop:8,textAlign:"center" }}>{loginError}</div>}
-            <button onClick={onLogin} style={{ ...btnPrimary,width:"100%",marginTop:16,padding:"11px" }}>Ingresar →</button>
-          </div>
-        ) : (
-          <div>
-            <Label>PIN de administrador</Label>
-            <input type="password" inputMode="numeric" value={adminPin} onChange={e=>setAdminPin(e.target.value)} onKeyDown={e=>e.key==="Enter"&&onAdminLogin()} placeholder="PIN numérico" style={{ ...inp,fontSize:18,letterSpacing:4,textAlign:"center" }}/>
-            {adminError&&<div style={{ color:"#dc2626",fontSize:11,marginTop:8,textAlign:"center" }}>PIN incorrecto</div>}
-            <button onClick={onAdminLogin} style={{ ...btnPrimary,width:"100%",marginTop:16,padding:"11px" }}>Ingresar →</button>
-          </div>
-        )}
+      <div style={{ background:"#f8fafc", border:"1px solid #cbd5e1", borderRadius:12, padding:32, width:"100%", maxWidth:380, textAlign:"center" }}>
+        <div style={{ fontSize:12, color:"#64748b", marginBottom:24 }}>Ingresá con tu cuenta corporativa</div>
+        <button onClick={onGoogleLogin} disabled={loading} style={{ width:"100%", padding:"13px 20px", background:"#fff", border:"2px solid #e2e8f0", borderRadius:8, cursor:loading?"default":"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:12, fontFamily:"'DM Mono',monospace", fontSize:13, color:"#1e293b" }}>
+          <svg width="20" height="20" viewBox="0 0 48 48">
+            <path fill="#4285F4" d="M44.5 20H24v8.5h11.8C34.7 33.9 30.1 37 24 37c-7.2 0-13-5.8-13-13s5.8-13 13-13c3.1 0 5.9 1.1 8.1 2.9l6.4-6.4C34.6 4.1 29.6 2 24 2 11.8 2 2 11.8 2 24s9.8 22 22 22c11 0 21-8 21-22 0-1.3-.2-2.7-.5-4z"/>
+            <path fill="#34A853" d="M6.3 14.7l7 5.1C15.1 16 19.2 13 24 13c3.1 0 5.9 1.1 8.1 2.9l6.4-6.4C34.6 4.1 29.6 2 24 2 16.3 2 9.7 7.4 6.3 14.7z"/>
+            <path fill="#FBBC05" d="M24 46c5.5 0 10.5-1.9 14.4-5l-6.7-5.5C29.7 37 27 38 24 38c-6 0-11-4-12.7-9.5l-7 5.4C7.8 41.8 15.4 46 24 46z"/>
+            <path fill="#EA4335" d="M44.5 20H24v8.5h11.8c-.8 2.6-2.4 4.8-4.6 6.3l6.7 5.5C42 37.1 45 31 45 24c0-1.3-.2-2.7-.5-4z"/>
+          </svg>
+          {loading ? "Conectando..." : "Ingresar con Google"}
+        </button>
+        <div style={{ fontSize:9, color:"#94a3b8", marginTop:20 }}>Solo cuentas @baumax.cl tienen acceso</div>
       </div>
     </div>
   );
