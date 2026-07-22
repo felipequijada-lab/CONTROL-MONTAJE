@@ -1225,8 +1225,32 @@ function AdminPanel({ obras, onBack, onObraCreated, setError, onViewObra }) {
   }
 
   async function loadUsuarios() {
-    try { const data=await sbFetch("usuarios?select=*"); setUsuarios(data); }
-    catch(e){ setError("Error: "+e.message); }
+    try {
+      const [data, asigs] = await Promise.all([
+        sbFetch("usuarios?select=*"),
+        sbFetch("usuarios_obras?select=*"),
+      ]);
+      // Attach obra assignments to each user
+      const withObras = data.map(u=>({
+        ...u,
+        obras_ids: asigs.filter(a=>String(a.usuario_id)===String(u.id)).map(a=>String(a.obra_id))
+      }));
+      setUsuarios(withObras);
+    } catch(e){ setError("Error: "+e.message); }
+  }
+
+  async function asignarObra(usuarioId, obraId) {
+    try {
+      await sbFetch("usuarios_obras",{method:"POST",body:JSON.stringify({usuario_id:usuarioId,obra_id:obraId})});
+      loadUsuarios();
+    } catch(e){ setError("Error: "+e.message); }
+  }
+
+  async function desasignarObra(usuarioId, obraId) {
+    try {
+      await sbFetch(`usuarios_obras?usuario_id=eq.${usuarioId}&obra_id=eq.${obraId}`,{method:"DELETE",headers:{"Prefer":"return=minimal"}});
+      loadUsuarios();
+    } catch(e){ setError("Error: "+e.message); }
   }
 
   async function aprobarDia(group) {
@@ -1769,7 +1793,7 @@ function AdminPanel({ obras, onBack, onObraCreated, setError, onViewObra }) {
             <Panel title="USUARIOS REGISTRADOS">
               {usuarios.length===0&&<div style={{ color:"#94a3b8",fontSize:12 }}>No hay usuarios registrados.</div>}
               {usuarios.map(u=>(
-                <div key={u.id} style={{ padding:"12px 0",borderBottom:"1px solid #f1f5f9" }}>
+                <div key={u.id} style={{ padding:"14px 0",borderBottom:"1px solid #f1f5f9" }}>
                   {editingUser===u.id ? (
                     <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr 1fr auto",gap:8,alignItems:"flex-end" }}>
                       <div><Label>Nombre</Label><input defaultValue={u.nombre} onChange={e=>u._nombre=e.target.value} style={inp}/></div>
@@ -1781,14 +1805,35 @@ function AdminPanel({ obras, onBack, onObraCreated, setError, onViewObra }) {
                       </div>
                     </div>
                   ) : (
-                    <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center" }}>
-                      <div>
-                        <div style={{ color:"#1e293b",fontWeight:"bold" }}>{u.nombre}</div>
-                        <div style={{ color:"#94a3b8",fontSize:10 }}>{u.mail} · RUT: {u.rut}</div>
+                    <div>
+                      <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8 }}>
+                        <div>
+                          <div style={{ color:"#1e293b",fontWeight:"bold" }}>{u.nombre}</div>
+                          <div style={{ color:"#94a3b8",fontSize:10 }}>{u.mail}</div>
+                        </div>
+                        <div style={{ display:"flex",gap:6 }}>
+                          <button onClick={()=>{ u._nombre=u.nombre; u._mail=u.mail; u._rut=u.rut; setEditingUser(u.id); }} style={{ background:"#fef3c7",color:"#d97706",border:"none",borderRadius:6,padding:"6px 12px",cursor:"pointer",fontFamily:"'DM Mono',monospace",fontSize:10 }}>✏ Editar</button>
+                          <button onClick={()=>eliminarUsuario(u.id)} style={{ background:"#fee2e2",color:"#dc2626",border:"none",borderRadius:6,padding:"6px 12px",cursor:"pointer",fontFamily:"'DM Mono',monospace",fontSize:10 }}>✕</button>
+                        </div>
                       </div>
-                      <div style={{ display:"flex",gap:6 }}>
-                        <button onClick={()=>{ u._nombre=u.nombre; u._mail=u.mail; u._rut=u.rut; setEditingUser(u.id); }} style={{ background:"#fef3c7",color:"#d97706",border:"none",borderRadius:6,padding:"6px 12px",cursor:"pointer",fontFamily:"'DM Mono',monospace",fontSize:10 }}>✏ Editar</button>
-                        <button onClick={()=>eliminarUsuario(u.id)} style={{ background:"#fee2e2",color:"#dc2626",border:"none",borderRadius:6,padding:"6px 12px",cursor:"pointer",fontFamily:"'DM Mono',monospace",fontSize:10 }}>✕</button>
+                      {/* Obras asignadas */}
+                      <div style={{ background:"#f8fafc",borderRadius:6,padding:"8px 12px" }}>
+                        <div style={{ fontSize:9,color:"#94a3b8",letterSpacing:1,marginBottom:6 }}>OBRAS ASIGNADAS</div>
+                        <div style={{ display:"flex",flexWrap:"wrap",gap:6 }}>
+                          {obrasActivas.map(o=>{
+                            const asignada = (u.obras_ids||[]).includes(String(o.id));
+                            return (
+                              <button key={o.id} onClick={()=>asignada?desasignarObra(u.id,o.id):asignarObra(u.id,o.id)}
+                                style={{ fontSize:10,padding:"4px 10px",borderRadius:6,border:"1px solid",cursor:"pointer",
+                                  background:asignada?"#dcfce7":"#f1f5f9",
+                                  color:asignada?"#16a34a":"#64748b",
+                                  borderColor:asignada?"#86efac":"#e2e8f0" }}>
+                                {asignada?"✓ ":""}{o.nombre}
+                              </button>
+                            );
+                          })}
+                          {obrasActivas.length===0&&<span style={{ fontSize:10,color:"#94a3b8" }}>Sin obras activas</span>}
+                        </div>
                       </div>
                     </div>
                   )}
@@ -1796,10 +1841,15 @@ function AdminPanel({ obras, onBack, onObraCreated, setError, onViewObra }) {
               ))}
             </Panel>
             <Panel title="ADMINISTRADORES">
-              <div style={{ fontSize:11,color:"#64748b",marginBottom:12 }}>Los administradores acceden con PIN. PIN actual: <span style={{ color:"#d97706",fontWeight:"bold" }}>configurado en el código</span></div>
-              <div style={{ background:"#fef9c3",border:"1px solid #fde68a",borderRadius:6,padding:10,fontSize:11,color:"#92400e" }}>
-                Para agregar o cambiar PINs de administrador, editá la constante <b>ADMIN_PINS</b> en el archivo App.jsx y hacé deploy.
+              <div style={{ fontSize:11,color:"#64748b",marginBottom:8 }}>Los administradores ingresan con Google y tienen acceso total a todas las obras.</div>
+              <div style={{ background:"#f8fafc",borderRadius:6,padding:"10px 12px" }}>
+                {ADMIN_EMAILS.map(email=>(
+                  <div key={email} style={{ fontSize:11,color:"#1e293b",padding:"4px 0",borderBottom:"1px solid #f1f5f9" }}>
+                    ◈ {email}
+                  </div>
+                ))}
               </div>
+              <div style={{ fontSize:10,color:"#94a3b8",marginTop:8 }}>Para agregar admins, edita la constante ADMIN_EMAILS en el código.</div>
             </Panel>
           </div>
         )}
