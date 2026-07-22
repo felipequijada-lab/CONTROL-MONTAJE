@@ -10,6 +10,11 @@ const ADMIN_EMAILS = [
   "oscar.maldonado@baumax.cl",
 ];
 
+// Emails con acceso de gerente (lectura total, sin edición)
+const GERENTE_EMAILS = [
+  "sebastian.luders@baumax.cl",
+];
+
 // Supabase Auth helpers
 async function signInWithGoogle() {
   const redirectTo = encodeURIComponent(window.location.origin);
@@ -598,6 +603,138 @@ ${adminStats.map((a,i)=>`<div class="section" style="page-break-before:always"><
 }
 
 // ── Tabla de elementos para portal cliente (filtrable, con fechas) ─────────────
+// ── Vista Gerente (lectura total, sin edición) ─────────────────────────────────
+function GerenteView({ obras, currentUser, onLogout, setError }) {
+  const [adminStats, setAdminStats] = useState([]);
+  const [weekColumns, setWeekColumns] = useState([]);
+  const [loadingStats, setLoadingStats] = useState(true);
+  const [selectedObra, setSelectedObra] = useState(null);
+
+  useEffect(()=>{ loadStats(); },[]);
+
+  async function loadStats() {
+    setLoadingStats(true);
+    try {
+      const obrasActivas = obras.filter(o=>o.estado!=="cerrada");
+      const stats = await Promise.all(obrasActivas.map(async o=>{
+        const [elems, regs, progData] = await Promise.all([
+          sbFetchAll(`elementos?obra_id=eq.${o.id}&select=pos,area,tipo,torre,piso`),
+          sbFetch(`registros?obra_id=eq.${o.id}&select=fecha,elementos_montados,elementos_recibidos,aprobado`),
+          sbFetch(`programa?obra_id=eq.${o.id}&select=*&order=semana.asc`),
+        ]);
+        const aprobados = regs.filter(r=>r.aprobado);
+        const montadosPos = new Set(aprobados.flatMap(r=>r.elementos_montados?r.elementos_montados.split(",").map(p=>p.trim()).filter(Boolean):[]));
+        const recibidosPos = new Set(aprobados.flatMap(r=>r.elementos_recibidos?r.elementos_recibidos.split(",").map(p=>p.trim()).filter(Boolean):[]));
+        const totalArea = elems.reduce((s,e)=>s+e.area,0);
+        const mountedArea = elems.filter(e=>elMatchesKeys(e,montadosPos)).reduce((s,e)=>s+e.area,0);
+        const receivedArea = elems.filter(e=>elMatchesKeys(e,recibidosPos)||elMatchesKeys(e,montadosPos)).reduce((s,e)=>s+e.area,0);
+        const weekMap = {};
+        aprobados.forEach(r=>{
+          const week=getWeekNumber(r.fecha);
+          if(!weekMap[week]) weekMap[week]=0;
+          const elPos=new Set(r.elementos_montados?r.elementos_montados.split(",").map(p=>p.trim()).filter(Boolean):[]);
+          weekMap[week]+=elems.filter(e=>elMatchesKeys(e,elPos)).reduce((s,e)=>s+e.area,0);
+        });
+        const currentWeek=getWeekNumber(TODAY);
+        const programadoAcum=progData.filter(p=>p.semana<=currentWeek).reduce((s,p)=>s+(p.meta||0),0);
+        const cumplimientoPct=programadoAcum>0?(mountedArea/programadoAcum)*100:null;
+        let acumProg=0;
+        const curvaSData=progData.map(p=>{
+          acumProg+=(p.meta||0);
+          const realAcum=Object.entries(weekMap).filter(([w])=>w<=p.semana).reduce((s,[,v])=>s+v,0);
+          return {semana:p.semana,acum:acumProg,real:Object.keys(weekMap).some(w=>w<=p.semana)?realAcum:null,realSemana:weekMap[p.semana]??null};
+        });
+        return {obra:o,totalArea,mountedArea,receivedArea,pctMounted:totalArea>0?(mountedArea/totalArea)*100:0,pctReceived:totalArea>0?(receivedArea/totalArea)*100:0,weekMap,cumplimientoPct,curvaSData};
+      }));
+      setAdminStats(stats);
+      const allWeeks=[...new Set(stats.flatMap(s=>Object.keys(s.weekMap)))].sort();
+      setWeekColumns(allWeeks);
+    } catch(e){ setError("Error: "+e.message); }
+    setLoadingStats(false);
+  }
+
+  if(selectedObra) return (
+    <ObraView obra={selectedObra} onBack={()=>setSelectedObra(null)} setError={setError} isAdmin={false} currentUser={currentUser} readOnly={true}/>
+  );
+
+  return (
+    <div style={{ minHeight:"100vh",background:"#e2e8f0",fontFamily:"'DM Mono','Courier New',monospace" }}>
+      <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Archivo+Black&display=swap" rel="stylesheet"/>
+      {/* Header */}
+      <div style={{ background:"#fff",borderBottom:"1px solid #cbd5e1",padding:"14px 28px",display:"flex",justifyContent:"space-between",alignItems:"center" }}>
+        <div>
+          <div style={{ fontFamily:"'Archivo Black',sans-serif",fontSize:20,color:"#d97706" }}>◈ CONTROL DE MONTAJE</div>
+          <div style={{ fontSize:9,color:"#94a3b8",letterSpacing:3 }}>BAUMAX SPA · VISTA GERENCIAL</div>
+        </div>
+        <div style={{ display:"flex",alignItems:"center",gap:16 }}>
+          <span style={{ fontSize:11,color:"#64748b" }}>Bienvenido, <b>{currentUser?.nombre}</b></span>
+          <button onClick={onLogout} style={{ ...btnSecondary,fontSize:10,padding:"6px 14px" }}>Salir</button>
+        </div>
+      </div>
+
+      <div style={{ maxWidth:1200,margin:"0 auto",padding:"24px 20px" }}>
+        {loadingStats ? <LoadingScreen/> : (<>
+
+          {/* KPIs consolidados */}
+          <div style={{ display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:20 }}>
+            {[
+              {label:"OBRAS ACTIVAS",    value:adminStats.length,           color:"#d97706", unit:""},
+              {label:"m² TOTAL",         value:fmt2(adminStats.reduce((s,a)=>s+a.totalArea,0)),  color:"#1e293b", unit:" m²"},
+              {label:"m² MONTADOS",      value:fmt2(adminStats.reduce((s,a)=>s+a.mountedArea,0)),color:"#16a34a", unit:" m²"},
+              {label:"CUMPLIM. PROMEDIO",value:(() => { const v=adminStats.filter(a=>a.cumplimientoPct!==null); return v.length>0?fmtPct(v.reduce((s,a)=>s+a.cumplimientoPct,0)/v.length):"—"; })(), color:"#2563eb", unit:""},
+            ].map(k=>(
+              <div key={k.label} style={{ background:"#fff",border:"1px solid #e2e8f0",borderRadius:10,padding:"16px",textAlign:"center" }}>
+                <div style={{ fontSize:8,color:"#94a3b8",letterSpacing:1,marginBottom:6 }}>{k.label}</div>
+                <div style={{ fontSize:22,fontWeight:"bold",color:k.color,fontFamily:"'Archivo Black',sans-serif" }}>{k.value}{k.unit}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Tabla comparativa obras */}
+          <Panel title="COMPARATIVO DE OBRAS">
+            <table style={{ width:"100%",borderCollapse:"collapse",fontSize:11 }}>
+              <thead><tr style={{ background:"#f1f5f9" }}>
+                <Th>OBRA</Th><Th>m² TOTAL</Th><Th>m² RECIBIDOS</Th><Th>% RECEPCIÓN</Th><Th>m² MONTADOS</Th><Th>% AVANCE</Th><Th>CUMPLIM.</Th><Th>ACCIÓN</Th>
+              </tr></thead>
+              <tbody>
+                {[...adminStats].sort((a,b)=>(a.cumplimientoPct??999)-(b.cumplimientoPct??999)).map(s=>(
+                  <tr key={s.obra.id} style={{ borderBottom:"1px solid #f1f5f9" }}>
+                    <Td accent="#1e293b">{s.obra.nombre}{s.obra.listado_estado!=="definitivo"&&<span style={{ marginLeft:6,fontSize:9,color:"#d97706" }}>⚠ prelim.</span>}</Td>
+                    <Td>{fmt2(s.totalArea)}</Td>
+                    <Td accent="#2563eb">{fmt2(s.receivedArea)}</Td>
+                    <Td><ProgressCell pct={s.pctReceived} color="#2563eb"/></Td>
+                    <Td accent="#16a34a">{fmt2(s.mountedArea)}</Td>
+                    <Td><ProgressCell pct={s.pctMounted} color="#16a34a"/></Td>
+                    <Td><span style={{ fontWeight:"bold",color:s.cumplimientoPct===null?"#94a3b8":s.cumplimientoPct>=100?"#16a34a":s.cumplimientoPct>=85?"#d97706":"#dc2626" }}>{s.cumplimientoPct===null?"Sin prog.":fmtPct(s.cumplimientoPct)}</span></Td>
+                    <Td><button onClick={()=>setSelectedObra(s.obra)} style={{ ...btnSecondary,padding:"4px 10px",fontSize:10 }}>Ver →</button></Td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </Panel>
+
+          {/* Gráfico consolidado */}
+          {weekColumns.length>0&&(
+            <Panel title="DESPACHADO vs MONTADO — TODAS LAS OBRAS">
+              <ConsolidadoSemanal adminStats={adminStats} weekColumns={weekColumns}/>
+            </Panel>
+          )}
+
+          {/* Curva S por obra */}
+          {adminStats.map(s=>(
+            s.curvaSData.length>0&&(
+              <Panel key={s.obra.id} title={`CURVA S — ${s.obra.nombre}`}>
+                <CurvaS data={s.curvaSData} obraNombre={s.obra.nombre}/>
+              </Panel>
+            )
+          ))}
+
+        </>)}
+      </div>
+    </div>
+  );
+}
+
 function ClienteElementosTable({ elements, dailyStats, montadosPos, recibidosPos }) {
   const [fTorre, setFTorre] = useState("TODAS");
   const [fPiso,  setFPiso]  = useState("TODOS");
@@ -1027,6 +1164,7 @@ export default function App() {
           return;
         }
         const isAdmin = ADMIN_EMAILS.includes(email);
+        const isGerente = GERENTE_EMAILS.includes(email);
         const nombre = user.user_metadata?.full_name || email.split("@")[0];
 
         // Load all obras
@@ -1036,6 +1174,9 @@ export default function App() {
         if(isAdmin) {
           setCurrentUser({ nombre, email, role:"admin" });
           setScreen("admin");
+        } else if(isGerente) {
+          setCurrentUser({ nombre, email, role:"gerente" });
+          setScreen("gerente");
         } else {
           // Find usuario by email in usuarios table
           const usuarios = await sbFetch(`usuarios?mail=ilike.${encodeURIComponent(email)}&select=*`);
@@ -1092,6 +1233,7 @@ export default function App() {
       {screen==="admin"      && <AdminPanel obras={obras} onBack={handleLogout} onObraCreated={loadObras} setError={setError} onViewObra={o=>{setSelectedObra(o);setScreen("obraAdmin");}}/>}
       {screen==="obra"       && selectedObra && <ObraView obra={selectedObra} onBack={()=>{currentUser?.role==="admin"?setScreen("admin"):setScreen("select");}} setError={setError} isAdmin={false} currentUser={currentUser}/>}
       {screen==="obraAdmin"  && selectedObra && <ObraView obra={selectedObra} onBack={()=>setScreen("admin")} setError={setError} isAdmin={true} currentUser={currentUser} onObraUpdated={loadObras}/>}
+      {screen==="gerente"    && <GerenteView obras={obras} currentUser={currentUser} onLogout={handleLogout} setError={setError}/>}
       {screen==="cliente"    && <ClientePortal token={clienteToken}/>}
     </div>
   );
@@ -1122,11 +1264,12 @@ function LoginScreen({ onGoogleLogin, loading }) {
 }
 
 // ── Select Screen ─────────────────────────────────────────────────────────────
-function SelectScreen({ obras, onSelectObra, onAdminClick, onRefresh }) {
+function SelectScreen({ obras, onSelectObra, onAdminClick, onRefresh, currentUser, onLogout }) {
   return (
     <div style={{ minHeight:"100vh", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:24 }}>
       <div style={{ fontFamily:"'Archivo Black',sans-serif", fontSize:24, color:"#d97706", marginBottom:4 }}>◈ CONTROL DE MONTAJE</div>
-      <div style={{ fontSize:10, color:"#94a3b8", letterSpacing:3, marginBottom:32 }}>BAUMAX SPA</div>
+      <div style={{ fontSize:10, color:"#94a3b8", letterSpacing:3, marginBottom:4 }}>BAUMAX SPA</div>
+      {currentUser?.nombre && <div style={{ fontSize:14, color:"#1e293b", marginBottom:24 }}>Bienvenido, <b>{currentUser.nombre}</b></div>}
       <div style={{ background:"#f8fafc", border:"1px solid #cbd5e1", borderRadius:12, padding:24, width:"100%", maxWidth:480 }}>
         <div style={{ fontSize:10, color:"#64748b", letterSpacing:2, marginBottom:16 }}>SELECCIONAR OBRA</div>
         {obras.length===0 ? <div style={{ color:"#94a3b8", fontSize:12, textAlign:"center", padding:20 }}>No hay obras activas.</div>
