@@ -1019,24 +1019,52 @@ export default function App() {
       const session = await getSession();
       if(session) {
         const { user } = session;
-        const email = user.email || "";
+        const email = (user.email || "").toLowerCase();
         // Restrict to @baumax.cl only
         if(!email.endsWith("@baumax.cl")){
-          setError(`Acceso denegado — solo cuentas @baumax.cl. (${email})`);
+          setError(`Acceso denegado — solo cuentas @baumax.cl tienen acceso. (${email})`);
           setLoading(false);
           return;
         }
-        const isAdmin = ADMIN_EMAILS.includes(email.toLowerCase());
+        const isAdmin = ADMIN_EMAILS.includes(email);
         const nombre = user.user_metadata?.full_name || email.split("@")[0];
-        setCurrentUser({ nombre, email, role: isAdmin ? "admin" : "encargado" });
-        await loadObras(isAdmin);
-        setScreen(isAdmin ? "admin" : "select");
+
+        // Load all obras
+        const todasObras = await sbFetch("obras?select=*&order=created_at.desc");
+        setObras(todasObras);
+
+        if(isAdmin) {
+          setCurrentUser({ nombre, email, role:"admin" });
+          setScreen("admin");
+        } else {
+          // Find usuario by email in usuarios table
+          const usuarios = await sbFetch(`usuarios?mail=ilike.${encodeURIComponent(email)}&select=*`);
+          if(usuarios.length===0){
+            setError(`Tu cuenta (${email}) no está registrada. Pide al administrador que te agregue en el panel de Usuarios.`);
+            setLoading(false);
+            return;
+          }
+          const usuario = usuarios[0];
+          // Get assigned obras
+          const asignaciones = await sbFetch(`usuarios_obras?usuario_id=eq.${usuario.id}&select=obra_id`);
+          const obrasIds = new Set(asignaciones.map(a=>String(a.obra_id)));
+          const obrasAsignadas = todasObras.filter(o=>o.estado!=="cerrada"&&obrasIds.has(String(o.id)));
+          if(obrasAsignadas.length===0){
+            setError(`No tienes obras asignadas. Pide al administrador que te asigne una obra.`);
+            setLoading(false);
+            return;
+          }
+          setCurrentUser({ ...usuario, email, role:"encargado" });
+          setObras(obrasAsignadas);
+          if(obrasAsignadas.length===1){ setSelectedObra(obrasAsignadas[0]); setScreen("obra"); }
+          else setScreen("select");
+        }
       }
     } catch(e){ setError("Error: "+e.message); }
     setLoading(false);
   }
 
-  async function loadObras(isAdminUser) {
+  async function loadObras() {
     try {
       const data = await sbFetch("obras?select=*&order=created_at.desc");
       setObras(data);
@@ -1060,10 +1088,10 @@ export default function App() {
       <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Archivo+Black&display=swap" rel="stylesheet"/>
       {error && <ErrorBar msg={error} onClose={()=>setError(null)}/>}
       {screen==="login"      && <LoginScreen onGoogleLogin={handleGoogleLogin} loading={loading}/>}
-      {screen==="select"     && <SelectScreen obras={obras.filter(o=>o.estado!=="cerrada")} currentUser={currentUser} onSelectObra={o=>{setSelectedObra(o);setScreen("obra");}} onLogout={handleLogout} onRefresh={()=>loadObras(false)}/>}
-      {screen==="admin"      && <AdminPanel obras={obras} onBack={handleLogout} onObraCreated={()=>loadObras(true)} setError={setError} onViewObra={o=>{setSelectedObra(o);setScreen("obraAdmin");}}/>}
+      {screen==="select"     && <SelectScreen obras={obras.filter(o=>o.estado!=="cerrada")} currentUser={currentUser} onSelectObra={o=>{setSelectedObra(o);setScreen("obra");}} onLogout={handleLogout} onRefresh={loadObras}/>}
+      {screen==="admin"      && <AdminPanel obras={obras} onBack={handleLogout} onObraCreated={loadObras} setError={setError} onViewObra={o=>{setSelectedObra(o);setScreen("obraAdmin");}}/>}
       {screen==="obra"       && selectedObra && <ObraView obra={selectedObra} onBack={()=>{currentUser?.role==="admin"?setScreen("admin"):setScreen("select");}} setError={setError} isAdmin={false} currentUser={currentUser}/>}
-      {screen==="obraAdmin"  && selectedObra && <ObraView obra={selectedObra} onBack={()=>setScreen("admin")} setError={setError} isAdmin={true} currentUser={currentUser} onObraUpdated={()=>loadObras(true)}/>}
+      {screen==="obraAdmin"  && selectedObra && <ObraView obra={selectedObra} onBack={()=>setScreen("admin")} setError={setError} isAdmin={true} currentUser={currentUser} onObraUpdated={loadObras}/>}
       {screen==="cliente"    && <ClientePortal token={clienteToken}/>}
     </div>
   );
@@ -1077,7 +1105,7 @@ function LoginScreen({ onGoogleLogin, loading }) {
       <div style={{ fontFamily:"'Archivo Black',sans-serif", fontSize:24, color:"#d97706", marginBottom:4 }}>◈ CONTROL DE MONTAJE</div>
       <div style={{ fontSize:10, color:"#94a3b8", letterSpacing:3, marginBottom:32 }}>BAUMAX SPA</div>
       <div style={{ background:"#f8fafc", border:"1px solid #cbd5e1", borderRadius:12, padding:32, width:"100%", maxWidth:380, textAlign:"center" }}>
-        <div style={{ fontSize:12, color:"#64748b", marginBottom:24 }}>Ingresá con tu cuenta corporativa</div>
+        <div style={{ fontSize:12, color:"#64748b", marginBottom:24 }}>Ingresa con tu cuenta corporativa</div>
         <button onClick={onGoogleLogin} disabled={loading} style={{ width:"100%", padding:"13px 20px", background:"#fff", border:"2px solid #e2e8f0", borderRadius:8, cursor:loading?"default":"pointer", display:"flex", alignItems:"center", justifyContent:"center", gap:12, fontFamily:"'DM Mono',monospace", fontSize:13, color:"#1e293b" }}>
           <svg width="20" height="20" viewBox="0 0 48 48">
             <path fill="#4285F4" d="M44.5 20H24v8.5h11.8C34.7 33.9 30.1 37 24 37c-7.2 0-13-5.8-13-13s5.8-13 13-13c3.1 0 5.9 1.1 8.1 2.9l6.4-6.4C34.6 4.1 29.6 2 24 2 11.8 2 2 11.8 2 24s9.8 22 22 22c11 0 21-8 21-22 0-1.3-.2-2.7-.5-4z"/>
@@ -1427,7 +1455,7 @@ function AdminPanel({ obras, onBack, onObraCreated, setError, onViewObra }) {
       const existentes = await sbFetchAll(`elementos?obra_id=eq.${obraId}&select=id,torre,piso,tipo,pos,area`);
       const existeMap = new Map(existentes.map(e=>[elKeyOf(e), e]));
 
-      const nuevos = [];
+      const nuetú = [];
       const actualizar = [];
       elementos.forEach(el=>{
         const key = elKeyOf(el);
