@@ -2575,7 +2575,7 @@ function ObraView({ obra, onBack, setError, isAdmin, currentUser, onObraUpdated 
                   <input type="date" value={selectedDate} onChange={e=>setSelectedDate(e.target.value)} style={inp}/>
                   <div style={{ fontSize:9,color:"#94a3b8",letterSpacing:2,marginTop:4 }}>SEMANA {getWeekNumber(selectedDate)}</div>
                   <Label>PERSONAL EN OBRA</Label>
-                  <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginTop:4 }}>
+                  <div className="bx-personal-grid" style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginTop:4 }}>
                     {PERSONAL_CARGOS.map(cargo=>(
                       <div key={cargo.key}>
                         <div style={{ fontSize:9,color:cargo.productivo?"#d97706":"#94a3b8",letterSpacing:1,marginBottom:2 }}>{cargo.label.toUpperCase()} {cargo.productivo?"★":""}</div>
@@ -3772,7 +3772,7 @@ function Toast({ msg, onClose }) {
     </div>
   );
 }
-function Panel({title,children}) { return <div style={{ background:"#f8fafc",border:"1px solid #cbd5e1",borderRadius:10,padding:18,marginBottom:16 }}><div style={{ fontSize:9,letterSpacing:3,color:"#94a3b8",marginBottom:12,borderBottom:"1px solid #e2e8f0",paddingBottom:8 }}>{title}</div>{children}</div>; }
+function Panel({title,children}) { return <div className="bx-panel" style={{ background:"#f8fafc",border:"1px solid #cbd5e1",borderRadius:10,padding:18,marginBottom:16 }}><div style={{ fontSize:9,letterSpacing:3,color:"#94a3b8",marginBottom:12,borderBottom:"1px solid #e2e8f0",paddingBottom:8 }}>{title}</div>{children}</div>; }
 function KPIBox({label,value,sub,color,large}) { return <div style={{ textAlign:"right",minWidth:130,background:"#f8fafc",border:"1px solid #cbd5e1",borderRadius:8,padding:"8px 12px" }}><div style={{ fontSize:8,color:"#94a3b8",letterSpacing:1,marginBottom:2 }}>{label}</div><div style={{ fontSize:large?20:15,fontFamily:"'Archivo Black',sans-serif",color }}>{value}</div><div style={{ fontSize:9,color:"#94a3b8" }}>{sub}</div></div>; }
 function StatCard({label,value,sub,color}) { return <div style={{ background:"#f8fafc",border:"1px solid #cbd5e1",borderRadius:8,padding:"12px 16px",textAlign:"center" }}><div style={{ fontSize:9,color:"#94a3b8",letterSpacing:2,marginBottom:4 }}>{label}</div><div style={{ fontSize:22,fontFamily:"'Archivo Black',sans-serif",color }}>{value}</div><div style={{ fontSize:10,color:"#64748b",marginTop:2 }}>{sub}</div></div>; }
 function ProgressCell({pct,color}) { return <div style={{ display:"flex",alignItems:"center",gap:6 }}><div style={{ flex:1,background:"#f1f5f9",borderRadius:4,height:6 }}><div style={{ width:pct+"%",height:6,background:color,borderRadius:4,transition:"width 0.5s" }}/></div><span style={{ fontSize:10,color,minWidth:36 }}>{fmtPct(pct)}</span></div>; }

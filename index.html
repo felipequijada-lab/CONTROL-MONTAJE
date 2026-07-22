@@ -39,6 +39,17 @@
         .bx-kpis-obra { gap: 6px !important; }
         .bx-kpis-obra > * { flex: 1 1 calc(50% - 6px) !important; min-width: 0 !important; }
 
+        /* Personal grid — 1 col on mobile */
+        .bx-personal-grid { grid-template-columns: 1fr !important; }
+
+        /* Admin tables scroll */
+        .bx-panel table { min-width: 400px; }
+        .bx-panel { overflow-x: auto !important; }
+
+        /* ObraView header stack */
+        .bx-obra-header { flex-direction: column !important; align-items: flex-start !important; gap: 10px !important; }
+        .bx-obra-header .bx-kpis-obra { width: 100% !important; }
+
         /* Tables — allow horizontal scroll */
         .bx-table-wrap { overflow-x: auto !important; -webkit-overflow-scrolling: touch; }
         .bx-table-wrap table { font-size: 10px !important; min-width: 500px; }
