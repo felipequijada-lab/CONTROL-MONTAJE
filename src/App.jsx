@@ -12,11 +12,8 @@ const ADMIN_EMAILS = [
 
 // Supabase Auth helpers
 async function signInWithGoogle() {
-  const res = await fetch(`${SUPABASE_URL}/auth/v1/authorize?provider=google&redirect_to=${encodeURIComponent(window.location.origin)}`, {
-    headers: { "apikey": SUPABASE_KEY }
-  });
-  // Use direct URL redirect
-  window.location.href = `${SUPABASE_URL}/auth/v1/authorize?provider=google&redirect_to=${encodeURIComponent(window.location.origin)}`;
+  const redirectTo = encodeURIComponent(window.location.origin);
+  window.location.href = `${SUPABASE_URL}/auth/v1/authorize?provider=google&redirect_to=${redirectTo}`;
 }
 
 async function getSession() {
@@ -1047,8 +1044,7 @@ export default function App() {
     } catch(e){ setError("Error: "+e.message); return []; }
   }
 
-  async function handleGoogleLogin() {
-    setLoading(true);
+  function handleGoogleLogin() {
     signInWithGoogle();
   }
 
