@@ -1626,7 +1626,7 @@ function AdminPanel({ obras, onBack, onObraCreated, setError, onViewObra, curren
       const existentes = await sbFetchAll(`elementos?obra_id=eq.${obraId}&select=id,torre,piso,tipo,pos,area`);
       const existeMap = new Map(existentes.map(e=>[elKeyOf(e), e]));
 
-      const nuetú = [];
+      const nuevos = [];
       const actualizar = [];
       elementos.forEach(el=>{
         const key = elKeyOf(el);
