@@ -1414,6 +1414,11 @@ function AdminPanel({ obras, onBack, onObraCreated, setError, onViewObra, curren
   const obrasCerradas = obras.filter(o=>o.estado==="cerrada");
 
   useEffect(()=>{
+    // Always load pending regs for the badge count
+    loadPendingRegs();
+  },[obras]);
+
+  useEffect(()=>{
     if(tab==="resumen") loadAdminStats();
     if(tab==="aprobacion") loadPendingRegs();
     if(tab==="usuarios") loadUsuarios();
@@ -1792,7 +1797,14 @@ function AdminPanel({ obras, onBack, onObraCreated, setError, onViewObra, curren
       </div>
       <div style={{ display:"flex", background:"#f8fafc", borderBottom:"1px solid #cbd5e1", padding:"0 28px" }}>
         {[["resumen","Dashboard"],["aprobacion","Aprobaciones"],["obras","Obras"],["usuarios","Usuarios"],["elementos","Elementos"],["programa","Programa"],["historico","Histórico"]].map(([k,l])=>(
-          <button key={k} onClick={()=>setTab(k)} style={{ background:"none",border:"none",cursor:"pointer",padding:"12px 16px",color:tab===k?"#d97706":"#64748b",borderBottom:tab===k?"2px solid #d97706":"2px solid transparent",fontFamily:"'DM Mono',monospace",fontSize:11 }}>{l}</button>
+          <button key={k} onClick={()=>setTab(k)} style={{ background:"none",border:"none",cursor:"pointer",padding:"12px 16px",color:tab===k?"#d97706":"#64748b",borderBottom:tab===k?"2px solid #d97706":"2px solid transparent",fontFamily:"'DM Mono',monospace",fontSize:11,display:"flex",alignItems:"center",gap:6 }}>
+            {l}
+            {k==="aprobacion"&&pendingRegs.length>0&&(
+              <span style={{ background:"#dc2626",color:"#fff",borderRadius:10,fontSize:9,padding:"1px 6px",fontWeight:"bold",lineHeight:"14px" }}>
+                {pendingRegs.length}
+              </span>
+            )}
+          </button>
         ))}
       </div>
 
